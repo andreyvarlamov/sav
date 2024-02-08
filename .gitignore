@@ -2,6 +2,10 @@ temp_ignore
 
 *.sublime-workspace
 
+# Windows build artifacts
+*.exp
+*.map
+
 # Prerequisites
 *.d
 
@@ -64,7 +68,7 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
+# [Bb]in/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
