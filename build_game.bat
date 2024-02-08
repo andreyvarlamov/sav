@@ -11,18 +11,18 @@ set srcdir=%rootdir%src
 
 set copt=/IC:\dev\shared\include /MDd /LDd /Z7 /Od /Oi /FC /GR- /nologo
 set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505
-set llib=sav_lib.lib SDL2.lib glad-dll.lib
+set llib=sav_lib.lib
 set lopt=/libpath:%libsdir% /debug /opt:ref /incremental:no
 
 pushd %bindir%
 
-copy nul dll-building.lock
+copy nul .lock
 
 rem Delete all pdbs if can (can't while still running - visual studio locks them all). And quiet the del "access is denied" output
 del savt_game_*.pdb > nul 2> nul
 
-cl %srcdir%\savt_game.cpp %copt% %cwopt% /link %llib% %lopt% /pdb:savt_game_%random%.pdb /export:Render
+cl %srcdir%\savt_game.cpp %copt% %cwopt% /link %llib% %lopt% /pdb:savt_game_%random%.pdb
 
-del dll-building.lock
+del .lock
 
 popd

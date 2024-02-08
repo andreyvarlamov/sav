@@ -1,225 +1,69 @@
+#include "sav_lib.h"
+
 #include <varand/varand_util.h>
 #include <varand/varand_types.h>
 
 #include <windows.h>
 
-#define GLAD_GLAPI_EXPORT
-#include <glad/glad.h>
+// #define GLAD_GLAPI_EXPORT
+// #include <glad/glad.h>
 #include <sdl2/SDL.h>
+// IMPORTANT: I THINK this is ok to do on all platorms. On windows for windows subsystem this will need to be WinMain.
+// When SDL_Init is called it doesn't return with an error that application didn't initialize properly.
+// Because SDL_MainIsReady is always set to true, unless SDL_MAIN_NEEDED is defined.
+// It seems that SDL_MAIN_NEEDED is only defined for ngage platform (Nokia????? lmao).
+// https://github.com/search?q=repo%3Alibsdl-org%2FSDL%20SDL_MAIN_NEEDED&type=code
+// In addition to setting SDL_MainIsReady, it parses argc and argv, but I can do it myself on platform layer if need be.
+// Then I don't have to link platform against SDL2main.lib and SDL2.lib. Just sav_lib has to be linked against SDL2.lib and glad.lib!!!
+#undef main
 
 #include <cstdio>
 
-__declspec(dllimport) int anotherVar;
-
-// extern "C" void SetAnotherVar(int a);
-
-extern "C" int SetGlobal(int a);
-
-extern "C" int GetSum(int a, int b);
-
-// extern "C" void Render(b32 *quit, b32 *isInitialized, u32 shaderProgram, u32 vao, SDL_Window *window, int currentFrame);
-
-static bool gameCodeIsValid;
-static HMODULE gameCodeDll;
-static FILETIME dllLastWriteTime;
-
-typedef void (*RenderDecl)(b32 *quit, b32 *isInitialized, SDL_Window *window, int currentFrame, u32 *shaderProgram, u32 *vao, u32 *vbo);
-
-static RenderDecl Render;
-
-FILETIME Win32GetFileModifiedTime(const char *filePath)
-{
-    FILETIME lastWriteTime = {};
-    
-    WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesEx(filePath, GetFileExInfoStandard, &data))
-    {
-        lastWriteTime = data.ftLastWriteTime;
-    }
-
-    return lastWriteTime;
-}
-
-void Win32LoadGameCode(const char *sourceDllPath, const char *tempDllPath)
-{
-    CopyFile(sourceDllPath, tempDllPath, FALSE);
-    
-    gameCodeDll = LoadLibraryA(tempDllPath);
-    
-    if (gameCodeDll)
-    {
-        Render = (RenderDecl)GetProcAddress(gameCodeDll, "Render");
-
-        gameCodeIsValid = Render;
-    }
-
-    dllLastWriteTime = Win32GetFileModifiedTime(sourceDllPath);
-}
-
-void Win32UnloadGameCode()
-{
-    if (gameCodeDll)
-    {
-        FreeLibrary(gameCodeDll);
-        gameCodeDll = 0;
-    }
-
-    gameCodeIsValid = false;
-    Render = 0;
-}
-
-inline void Win32ReloadGameCode(const char *sourceDllPath, const char *tempDllPath, const char *lockFilePath)
-{
-    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(sourceDllPath);
-    int compareResult = CompareFileTime(&dllNewWriteTime, &dllLastWriteTime);
-    
-    if (compareResult == 1)
-    {
-        DWORD lockFileAttrib = GetFileAttributes(lockFilePath);
-        bool lockFilePresent = (lockFileAttrib != INVALID_FILE_ATTRIBUTES);
-        
-        SYSTEMTIME dllLastWriteTimeSystem;
-        int result = FileTimeToSystemTime(&dllLastWriteTime, &dllLastWriteTimeSystem);
-                        
-        SYSTEMTIME dllNewWriteTimeSystem;
-        result = FileTimeToSystemTime(&dllNewWriteTime, &dllNewWriteTimeSystem);
-
-        printf("Old: %02d:%02d:%02d:%03d | New: %02d:%02d:%02d:%03d. Result: %d. Lock file present: %d\n",
-               dllLastWriteTimeSystem.wHour,
-               dllLastWriteTimeSystem.wMinute,
-               dllLastWriteTimeSystem.wSecond,
-               dllLastWriteTimeSystem.wMilliseconds,
-               dllNewWriteTimeSystem.wHour,
-               dllNewWriteTimeSystem.wMinute,
-               dllNewWriteTimeSystem.wSecond,
-               dllNewWriteTimeSystem.wMilliseconds,
-               compareResult,
-               lockFilePresent);
- 
-        // NOTE: Check lock file is not present (if present - rebuild is not done yet)
-        if (!lockFilePresent)
-        {
-            Win32UnloadGameCode();
-            Win32LoadGameCode(sourceDllPath, tempDllPath);
-        }
-    }
-}
-
 int main(int argc, char **argv)
 {
-    if (SDL_Init(SDL_INIT_VIDEO) == 0)
+    SDL_Window *window = 0;
+    
+    if (InitWindow(&window, "SAV", 1920, 1080))
     {
-        SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        SDL_Window *window = SDL_CreateWindow("SAV",
-                                              SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                              1920, 1080,
-                                              SDL_WINDOW_OPENGL);// | SDL_WINDOW_RESIZABLE);
+        const char *gameCodeDllPath = "C:/dev/sav/bin/savt_game.dll";
+        const char *gameCodeTempDllPath = "C:/dev/sav/bin/savt_game_temp.dll";
+        const char *lockFilePath = "C:/dev/sav/bin/.lock";
 
+        game_code gameCodeData = {};
+        game_code *gameCode = &gameCodeData;
+                    
+        Win32LoadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath);
 
-        if (window)
+        int currentFrame = 0;
+
+        u32 shaderProgram = 0;
+        u32 vbo = 0;
+        u32 vao = 0;
+
+        b32 isInitialized = false;
+        b32 quit = false;
+        while (!quit)
         {
-            SDL_GLContext glContext = SDL_GL_CreateContext(window);
-
-            if (glContext)
+            PollEvents(&quit);
+            
+            const u8 *sdlKeyboardState = GetSdlKeyboardState();
+            if (sdlKeyboardState[SDL_SCANCODE_ESCAPE])
             {
-                gladLoadGLLoader(SDL_GL_GetProcAddress);
-                printf("OpenGL loaded\n");
-                printf("Vendor: %s\n", glGetString(GL_VENDOR));
-                printf("Renderer: %s\n", glGetString(GL_RENDERER));
-                printf("Version: %s\n", glGetString(GL_VERSION));
+                quit = true;
+            }
 
-                int screenWidth, screenHeight;
-                SDL_GetWindowSize(window, &screenWidth, &screenHeight);
-                glViewport(0, 0, screenWidth, screenHeight);
-                
-                // SDL_Surface *windowSurface = SDL_GetWindowSurface(window);
-
-                SDL_Surface *texture = SDL_LoadBMP("res/test.bmp");
-
-                if (texture)
-                {
-                    const char *gameCodeDllPath = "C:/dev/sav/bin/savt_game.dll";
-                    const char *gameCodeTempDllPath = "C:/dev/sav/bin/savt_game_temp.dll";
-                    const char *lockFilePath = "C:/dev/sav/bin/.lock";
-                    Win32LoadGameCode(gameCodeDllPath, gameCodeTempDllPath);
-
-                    int currentFrame = 0;
-
-                    u32 shaderProgram = 0;
-                    u32 vbo = 0;
-                    u32 vao = 0;
-
-                    SetGlobal(100);
-                    // SetAnotherVar(144);
-                    anotherVar = 256;
-
-                    b32 isInitialized = false;
-                    b32 quit = false;
-                    while (!quit)
-                    {
-                        // printf("From sav: %d\n", GetSum(1, 2));
-                        // const u8 *sdlKeyboardState = SDL_GetKeyboardState(0);
-                        // if (sdlKeyboardState[SDL_SCANCODE_ESCAPE])
-                        // {
-                        //     quit = true;
-                        // }
-
-                        // if (sdlKeyboardState[SDL_SCANCODE_1])
-                        // {
-                        //     printf("Main exe: 1 button\n");
-                        // }
-
-                        // SDL_BlitSurface(texture, NULL, windowSurface, NULL);
-
-                        // SDL_UpdateWindowSurface(window);
-
-                        Win32ReloadGameCode(gameCodeDllPath, gameCodeTempDllPath, lockFilePath);
+            Win32ReloadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath, lockFilePath);
                         
-                        if (Render)
-                        {
-                            Render(&quit, &isInitialized, window, currentFrame, &shaderProgram, &vbo, &vao);
-                        }
-
-                        // char title[256];
-                        // sprintf_s(title, "SAV (%d)", GetSum(100, 100, currentFrame / 100));
-                        // SDL_SetWindowTitle(window, title);
-
-                        // SDL_GL_SwapWindow(window);
-
-                        currentFrame++;
-                    }
-                }
-                else
-                {
-                    // TODO: Logging
-                    InvalidCodePath;
-                }
-            }
-            else
+            if (gameCode->Render)
             {
-                // TODO: Logging
-                InvalidCodePath;
+                gameCode->Render(&quit, &isInitialized, window, currentFrame, &shaderProgram, &vbo, &vao);
             }
-        }
-        else
-        {
-            // TODO: Logging
-            InvalidCodePath;
-        }
-        
-        SDL_DestroyWindow(window);
 
-        SDL_Quit();
+            currentFrame++;
+        }
     }
-    else
-    {
-        // TODO: Logging
-        InvalidCodePath;
-    }
+
+    Quit(window);
     
     return 0;
 }

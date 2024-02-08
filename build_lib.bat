@@ -11,12 +11,12 @@ set srcdir=%rootdir%src
 
 set copt=/IC:\dev\shared\include /MDd /LDd /Z7 /Od /Oi /FC /GR- /nologo
 set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505
-set llib=
+set llib=SDL2.lib glad-dll.lib
 set lopt=/libpath:%libsdir% /debug /opt:ref /incremental:no
 
 pushd %bindir%
 
 rem /section:.shared,rw 
-cl %srcdir%\sav_lib.cpp %copt% %cwopt% /Fmsav_lib.map /link %llib% %lopt% /export:GetSum /export:SetGlobal /export:GetAnotherVar /export:SetAnotherVar
+cl %srcdir%\sav_lib.cpp %copt% %cwopt% /DSAV_EXPORTS /link %llib% %lopt%
 
 popd
