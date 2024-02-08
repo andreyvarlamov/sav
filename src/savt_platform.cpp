@@ -7,8 +7,13 @@
 #include <glad/glad.h>
 #include <sdl2/SDL.h>
 
-
 #include <cstdio>
+
+__declspec(dllimport) int anotherVar;
+
+// extern "C" void SetAnotherVar(int a);
+
+extern "C" int SetGlobal(int a);
 
 extern "C" int GetSum(int a, int b);
 
@@ -22,12 +27,12 @@ typedef void (*RenderDecl)(b32 *quit, b32 *isInitialized, SDL_Window *window, in
 
 static RenderDecl Render;
 
-FILETIME Win32GetLastWriteTime(const char *filepath)
+FILETIME Win32GetFileModifiedTime(const char *filePath)
 {
     FILETIME lastWriteTime = {};
     
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesEx(filepath, GetFileExInfoStandard, &data))
+    if (GetFileAttributesEx(filePath, GetFileExInfoStandard, &data))
     {
         lastWriteTime = data.ftLastWriteTime;
     }
@@ -35,18 +40,20 @@ FILETIME Win32GetLastWriteTime(const char *filepath)
     return lastWriteTime;
 }
 
-void Win32LoadGameCode(const char *sourceDllName, const char *tempDllName)
+void Win32LoadGameCode(const char *sourceDllPath, const char *tempDllPath)
 {
-    dllLastWriteTime = Win32GetLastWriteTime(sourceDllName);
+    CopyFile(sourceDllPath, tempDllPath, FALSE);
     
-    CopyFile(sourceDllName, tempDllName, FALSE);
-    gameCodeDll = LoadLibraryA(tempDllName);
+    gameCodeDll = LoadLibraryA(tempDllPath);
+    
     if (gameCodeDll)
     {
         Render = (RenderDecl)GetProcAddress(gameCodeDll, "Render");
 
         gameCodeIsValid = Render;
     }
+
+    dllLastWriteTime = Win32GetFileModifiedTime(sourceDllPath);
 }
 
 void Win32UnloadGameCode()
@@ -59,6 +66,43 @@ void Win32UnloadGameCode()
 
     gameCodeIsValid = false;
     Render = 0;
+}
+
+inline void Win32ReloadGameCode(const char *sourceDllPath, const char *tempDllPath, const char *lockFilePath)
+{
+    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(sourceDllPath);
+    int compareResult = CompareFileTime(&dllNewWriteTime, &dllLastWriteTime);
+    
+    if (compareResult == 1)
+    {
+        DWORD lockFileAttrib = GetFileAttributes(lockFilePath);
+        bool lockFilePresent = (lockFileAttrib != INVALID_FILE_ATTRIBUTES);
+        
+        SYSTEMTIME dllLastWriteTimeSystem;
+        int result = FileTimeToSystemTime(&dllLastWriteTime, &dllLastWriteTimeSystem);
+                        
+        SYSTEMTIME dllNewWriteTimeSystem;
+        result = FileTimeToSystemTime(&dllNewWriteTime, &dllNewWriteTimeSystem);
+
+        printf("Old: %02d:%02d:%02d:%03d | New: %02d:%02d:%02d:%03d. Result: %d. Lock file present: %d\n",
+               dllLastWriteTimeSystem.wHour,
+               dllLastWriteTimeSystem.wMinute,
+               dllLastWriteTimeSystem.wSecond,
+               dllLastWriteTimeSystem.wMilliseconds,
+               dllNewWriteTimeSystem.wHour,
+               dllNewWriteTimeSystem.wMinute,
+               dllNewWriteTimeSystem.wSecond,
+               dllNewWriteTimeSystem.wMilliseconds,
+               compareResult,
+               lockFilePresent);
+ 
+        // NOTE: Check lock file is not present (if present - rebuild is not done yet)
+        if (!lockFilePresent)
+        {
+            Win32UnloadGameCode();
+            Win32LoadGameCode(sourceDllPath, tempDllPath);
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -98,9 +142,9 @@ int main(int argc, char **argv)
 
                 if (texture)
                 {
-                    const char *gameCodeDllPath = "C:/dev/sav/bin/sav-dll.dll";
-                    const char *gameCodeTempDllPath = "C:/dev/sav/bin/sav-dll-temp.dll";
-                   
+                    const char *gameCodeDllPath = "C:/dev/sav/bin/savt_game.dll";
+                    const char *gameCodeTempDllPath = "C:/dev/sav/bin/savt_game_temp.dll";
+                    const char *lockFilePath = "C:/dev/sav/bin/.lock";
                     Win32LoadGameCode(gameCodeDllPath, gameCodeTempDllPath);
 
                     int currentFrame = 0;
@@ -108,6 +152,10 @@ int main(int argc, char **argv)
                     u32 shaderProgram = 0;
                     u32 vbo = 0;
                     u32 vao = 0;
+
+                    SetGlobal(100);
+                    // SetAnotherVar(144);
+                    anotherVar = 256;
 
                     b32 isInitialized = false;
                     b32 quit = false;
@@ -129,13 +177,7 @@ int main(int argc, char **argv)
 
                         // SDL_UpdateWindowSurface(window);
 
-
-                        FILETIME newDllWriteTime = Win32GetLastWriteTime(gameCodeDllPath);
-                        if (CompareFileTime(&newDllWriteTime, &dllLastWriteTime) == 1)
-                        {
-                            Win32UnloadGameCode();
-                            Win32LoadGameCode(gameCodeDllPath, gameCodeTempDllPath);
-                        }
+                        Win32ReloadGameCode(gameCodeDllPath, gameCodeTempDllPath, lockFilePath);
                         
                         if (Render)
                         {

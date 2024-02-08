@@ -1,3 +1,4 @@
+#include <varand/varand_util.h>
 #include <varand/varand_types.h>
 
 #define GLAD_GLAPI_EXPORT
@@ -8,12 +9,16 @@
 
 #include <vector>
 
+__declspec(dllimport) int anotherVar;
+
+// extern "C" int GetAnotherVar();
+
+extern "C" int SetGlobal(int a);
 extern "C" int GetSum(int a, int b);
 // int GetSum(int a, int b, int c)
 // {
 //     return GetSum(a, b + c);
 // }
-
 
 u32 BuildShader()
 {
@@ -74,17 +79,63 @@ u32 BuildShader()
     return shaderProgram;
 }
 
+#if 0
+struct gl_state
+{
+    f32 *vertices;
+    i32 vertexCount;
+    i32 maxVertexCount;
+    u32 shaderProgram;
+    u32 vbo;
+    u32 vao;
+};
+
+static gl_state gGlState;
+
+void AddVertex(gl_state *glState, f32 X, f32 Y, f32 Z)
+{
+    glState->vertices[glState->vertexCount++] = X;
+    glState->vertices[glState->vertexCount++] = Y;
+    glState->vertices[glState->vertexCount++] = Z;
+}
+
+void RenderGL(gl_state *glState)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, glState->vbo);
+    glBufferData(GL_ARRAY_BUFFER, glState->vertexCount * sizeof(f32), glState->vertices, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
+    glUseProgram(glState->shaderProgram);
+    glBindVertexArray(glState->vao);
+    glDrawArrays(GL_TRIANGLES, 0, glState->vertices);
+    glBindVertexArray(0);
+}
+
+void AddVertex(f32 X, f32 Y, f32 Z)
+{
+    AddVertex(&gGlState, X, Y, Z);
+}
+
+void RenderGL()
+{
+    RenderGL(&gGlState);
+}
+#endif
+
 extern "C" void Render(b32 *quit, b32 *isInitialized, SDL_Window *window, int currentFrame, u32 *shaderProgram, u32 *vbo, u32 *vao) 
 {
     if (!*isInitialized)
     {
-        printf("%u, %u: %d \n", *shaderProgram, vao, GetSum(10, 10));
+        printf("%u, %u: %d \n", *shaderProgram, *vao, anotherVar);
 
         *shaderProgram = BuildShader();
 
         glGenBuffers(1, vbo);
         glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-        glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(float), 0, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float), 0, GL_STATIC_DRAW);
+        // GLint bufferSize;
+        // glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &bufferSize);
+        // printf("original buffer size: %d\n", bufferSize);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         glGenVertexArrays(1, vao);
@@ -122,23 +173,30 @@ extern "C" void Render(b32 *quit, b32 *isInitialized, SDL_Window *window, int cu
 
     if (currentFrame % 60 == 0)
     {
-        printf("%u, %u, %u \n", *vbo, *vao, *shaderProgram);
+        printf("%u, %u, %u ---- %d\n", *vbo, *vao, *shaderProgram, anotherVar);
     }
+    
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     glBindBuffer(GL_ARRAY_BUFFER, *vbo);
     float triangle[] = {
-        -1.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f,
-        0.0f, 1.0f, 0.0f
+        -0.5f, -1.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        // 0.0f, -1.0f, 0.0f,
+        // 0.0f, 1.0f, 0.0f,
+        // 1.0f, 1.0f, 0.0f
     };
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(triangle), triangle);
-
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
     glUseProgram(*shaderProgram);
     glBindVertexArray(*vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES, 0, ArrayCount(triangle) / 3);
 
     char title[256];
-    sprintf_s(title, "SAV (%d)", GetSum(100, currentFrame / 100));
+    sprintf_s(title, "SAV (%d)", GetSum(0, currentFrame / 100));
     SDL_SetWindowTitle(window, title);
 
     SDL_GL_SwapWindow(window);
