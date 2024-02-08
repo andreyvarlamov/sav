@@ -26,6 +26,16 @@ struct game_code
     RenderDecl Render;
 };
 
+struct music_stream
+{
+    void *music;
+};
+
+struct sound_chunk
+{
+    void *sound;
+};
+
 SAV_API b32 InitWindow(SDL_Window **window, const char *name, int width, int height);
 SAV_API void PollEvents(b32 *quit);
 SAV_API const u8 *GetSdlKeyboardState();
@@ -39,6 +49,12 @@ SAV_API void BeginDraw();
 SAV_API void DrawVertices(u32 shaderProgram, u32 vbo, u32 vao, float *vertices, int vertexCount);
 SAV_API void SetWindowTitle(SDL_Window *window, const char *title);
 SAV_API void EndDraw(SDL_Window *window);
-
+SAV_API b32 InitAudio();
+SAV_API music_stream LoadMusicStream(const char *filePath);
+SAV_API sound_chunk LoadSoundChunk(const char *filePath);
+SAV_API b32 PlayMusicStream(music_stream stream);
+SAV_API b32 PlaySoundChunk(sound_chunk chunk);
+SAV_API void FreeMusicStream(music_stream stream);
+SAV_API void FreeSoundChunk(sound_chunk chunk);
 
 #endif

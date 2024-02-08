@@ -3,6 +3,7 @@
 #define GLAD_GLAPI_EXPORT
 #include <glad/glad.h>
 #include <sdl2/SDL.h>
+#include <sdl2/SDL_mixer.h>
 
 #include <cstdio>
 
@@ -58,6 +59,71 @@ b32 InitWindow(SDL_Window **window, const char *name, int width, int height)
     }
 
     return true;
+}
+
+b32 InitAudio()
+{
+    if (SDL_Init(SDL_INIT_AUDIO) == 0)
+    {
+        if (Mix_OpenAudio(48000, MIX_DEFAULT_FORMAT, 2, 2048) == 0)
+        {
+            printf("Audio device loaded\n");
+            return true;
+        }
+        else
+        {
+            printf("SDL failed to open audio device\n");
+            return true;
+        }
+    }
+    else
+    {
+        printf("SDL failed to init audio subsystem\n");
+        return false;
+    }
+}
+
+music_stream LoadMusicStream(const char *filePath)
+{
+    music_stream result;
+
+    Mix_Music *mixMusic = Mix_LoadMUS(filePath);
+
+    result.music = (void *) mixMusic;
+    
+    return result;
+}
+
+sound_chunk LoadSoundChunk(const char *filePath)
+{
+    sound_chunk result;
+
+    Mix_Chunk *mixChunk = Mix_LoadWAV(filePath);
+
+    result.sound = (void *) mixChunk;
+    
+    return result;
+}
+
+b32 PlayMusicStream(music_stream stream)
+{
+    return (Mix_PlayMusic((Mix_Music *) stream.music, 0) == 0);
+}
+
+b32 PlaySoundChunk(sound_chunk chunk)
+{
+    int result = Mix_PlayChannel(2, (Mix_Chunk *) chunk.sound, 0);
+    return (result != -1);
+}
+
+void FreeMusicStream(music_stream stream)
+{
+    Mix_FreeMusic((Mix_Music *) stream.music);
+}
+
+void FreeSoundChunk(sound_chunk chunk)
+{
+    Mix_FreeChunk((Mix_Chunk *) chunk.sound);
 }
 
 void PollEvents(b32 *quit)

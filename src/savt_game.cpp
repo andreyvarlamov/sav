@@ -13,6 +13,9 @@
 
 GAME_API void Render(b32 *quit, b32 *isInitialized, SDL_Window *window, int currentFrame, u32 *shaderProgram, u32 *vbo, u32 *vao) 
 {
+    static sound_chunk chunk;
+    static b32 alreadyPlaying = false;
+    
     if (!*isInitialized)
     {
         printf("%u, %u\n", *shaderProgram, *vao);
@@ -20,13 +23,27 @@ GAME_API void Render(b32 *quit, b32 *isInitialized, SDL_Window *window, int curr
         *shaderProgram = BuildShader();
         PrepareGpuData(vbo, vao);
         
+        InitAudio();
+
+        music_stream stream = LoadMusicStream("res/country.mp3");
+
+        chunk = LoadSoundChunk("res/click.wav");
+
+        PlayMusicStream(stream);
+
         *isInitialized = true;
     }
 
     const u8 *sdlKeyboardState = GetSdlKeyboardState();
-    if (sdlKeyboardState[SDL_SCANCODE_2])
+    if (sdlKeyboardState[SDL_SCANCODE_2] && !alreadyPlaying)
     {
-        printf("Main exe: 2 button\n");
+        PlaySoundChunk(chunk);
+        alreadyPlaying = true;
+        printf("Main exe: 2 button. %d \n", alreadyPlaying);
+    }
+    else if (!sdlKeyboardState[SDL_SCANCODE_2])
+    {
+        alreadyPlaying = false;
     }
 
     if (currentFrame % 60 == 0)

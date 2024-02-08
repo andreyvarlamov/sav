@@ -23,44 +23,43 @@ int main(int argc, char **argv)
 {
     SDL_Window *window = 0;
     
-    if (InitWindow(&window, "SAV", 1920, 1080))
-    {
-        const char *gameCodeDllPath = "C:/dev/sav/bin/savt_game.dll";
-        const char *gameCodeTempDllPath = "C:/dev/sav/bin/savt_game_temp.dll";
-        const char *lockFilePath = "C:/dev/sav/bin/.lock";
+    InitWindow(&window, "SAV", 1920, 1080);
 
-        game_code gameCodeData = {};
-        game_code *gameCode = &gameCodeData;
+    const char *gameCodeDllPath = "C:/dev/sav/bin/savt_game.dll";
+    const char *gameCodeTempDllPath = "C:/dev/sav/bin/savt_game_temp.dll";
+    const char *lockFilePath = "C:/dev/sav/bin/.lock";
+
+    game_code gameCodeData = {};
+    game_code *gameCode = &gameCodeData;
                     
-        Win32LoadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath);
+    Win32LoadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath);
 
-        int currentFrame = 0;
+    int currentFrame = 0;
 
-        u32 shaderProgram = 0;
-        u32 vbo = 0;
-        u32 vao = 0;
+    u32 shaderProgram = 0;
+    u32 vbo = 0;
+    u32 vao = 0;
 
-        b32 isInitialized = false;
-        b32 quit = false;
-        while (!quit)
-        {
-            PollEvents(&quit);
+    b32 isInitialized = false;
+    b32 quit = false;
+    while (!quit)
+    {
+        PollEvents(&quit);
             
-            const u8 *sdlKeyboardState = GetSdlKeyboardState();
-            if (sdlKeyboardState[SDL_SCANCODE_ESCAPE])
-            {
-                quit = true;
-            }
-
-            Win32ReloadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath, lockFilePath);
-                        
-            if (gameCode->Render)
-            {
-                gameCode->Render(&quit, &isInitialized, window, currentFrame, &shaderProgram, &vbo, &vao);
-            }
-
-            currentFrame++;
+        const u8 *sdlKeyboardState = GetSdlKeyboardState();
+        if (sdlKeyboardState[SDL_SCANCODE_ESCAPE])
+        {
+            quit = true;
         }
+
+        Win32ReloadGameCode(gameCode, gameCodeDllPath, gameCodeTempDllPath, lockFilePath);
+                        
+        if (gameCode->Render)
+        {
+            gameCode->Render(&quit, &isInitialized, window, currentFrame, &shaderProgram, &vbo, &vao);
+        }
+
+        currentFrame++;
     }
 
     Quit(window);
