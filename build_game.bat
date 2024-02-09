@@ -16,13 +16,13 @@ set lopt=/libpath:%libsdir% /debug /opt:ref /incremental:no
 
 pushd %bindir%
 
-copy nul .lock
+copy nul savt_game.lock
 
 rem Delete all pdbs if can (can't while still running - visual studio locks them all). And quiet the del "access is denied" output
 del savt_game_*.pdb > nul 2> nul
 
 cl %srcdir%\savt_game.cpp %copt% %cwopt% /link %llib% %lopt% /pdb:savt_game_%random%.pdb
 
-del .lock
+del savt_game.lock
 
 popd

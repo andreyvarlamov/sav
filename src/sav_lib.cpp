@@ -1,15 +1,46 @@
 #include "sav_lib.h"
 
+#include <varand/varand_util.h>
+#include <varand/varand_sstring.h>
+
+#include <windows.h>
+
 #define GLAD_GLAPI_EXPORT
 #include <glad/glad.h>
+
 #include <sdl2/SDL.h>
 #include <sdl2/SDL_mixer.h>
 
 #include <cstdio>
 
-#include <windows.h>
+void *Win32AllocMemory(size_t size)
+{
+    void *memory = VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
-b32 InitWindow(SDL_Window **window, const char *name, int width, int height)
+    if (memory == NULL)
+    {
+        printf("Could not virtual alloc.\n");
+    }
+    
+    return memory;
+}
+
+game_memory AllocGameMemory(size_t size)
+{
+    game_memory gameMemory;
+    gameMemory.size = Megabytes(128);
+    gameMemory.data = Win32AllocMemory(gameMemory.size);
+    return gameMemory;
+}
+
+struct sdl_state
+{
+    SDL_Window *window;
+    int windowWidth;
+    int windowHeight;
+};
+
+b32 InitWindow(sdl_state *sdlState, const char *windowName, int windowWidth, int windowHeight)
 {
     if (SDL_Init(SDL_INIT_VIDEO) == 0)
     {
@@ -18,14 +49,16 @@ b32 InitWindow(SDL_Window **window, const char *name, int width, int height)
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        *window = SDL_CreateWindow(name,
-                                   SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                   width, height,
-                                   SDL_WINDOW_OPENGL);// | SDL_WINDOW_RESIZABLE);
+        sdlState->windowWidth = windowWidth;
+        sdlState->windowHeight = windowHeight;
+        sdlState->window = SDL_CreateWindow(windowName,
+                                            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                            sdlState->windowWidth, sdlState->windowHeight,
+                                            SDL_WINDOW_OPENGL);// | SDL_WINDOW_RESIZABLE);
 
-        if (*window)
+        if (sdlState->window)
         {
-            SDL_GLContext glContext = SDL_GL_CreateContext(*window);
+            SDL_GLContext glContext = SDL_GL_CreateContext(sdlState->window);
 
             if (glContext)
             {
@@ -36,7 +69,7 @@ b32 InitWindow(SDL_Window **window, const char *name, int width, int height)
                 printf("Version: %s\n", glGetString(GL_VERSION));
 
                 int screenWidth, screenHeight;
-                SDL_GetWindowSize(*window, &screenWidth, &screenHeight);
+                SDL_GetWindowSize(sdlState->window, &screenWidth, &screenHeight);
                 glViewport(0, 0, screenWidth, screenHeight);
             }
             else
@@ -59,6 +92,12 @@ b32 InitWindow(SDL_Window **window, const char *name, int width, int height)
     }
 
     return true;
+}
+
+static_g sdl_state gSdlState;
+b32 InitWindow(const char *name, int width, int height)
+{
+    return InitWindow(&gSdlState, name, width, height);
 }
 
 b32 InitAudio()
@@ -143,15 +182,33 @@ const u8 *GetSdlKeyboardState()
     return SDL_GetKeyboardState(0);
 }
 
-void Quit(SDL_Window *window)
+void Quit(sdl_state *sdlState)
 {
-    if (window)
+   if (sdlState->window)
     {
-        SDL_DestroyWindow(window);
+        SDL_DestroyWindow(sdlState->window);
     }
 
     SDL_Quit();
 }
+
+void Quit()
+{
+    Quit(&gSdlState);
+}
+
+struct game_code
+{
+    b32 isValid;
+    HMODULE dll;
+    FILETIME lastWriteTime;
+
+    simple_string sourceDllPath;
+    simple_string tempDllPath;
+    simple_string lockFilePath;
+    
+    void *UpdateAndRenderFunc;
+};
 
 static FILETIME Win32GetFileModifiedTime(const char *filePath)
 {
@@ -166,20 +223,20 @@ static FILETIME Win32GetFileModifiedTime(const char *filePath)
     return lastWriteTime;
 }
 
-void Win32LoadGameCode(game_code *gameCode, const char *sourceDllPath, const char *tempDllPath)
+void Win32LoadGameCode(game_code *gameCode)
 {
-    CopyFile(sourceDllPath, tempDllPath, FALSE);
+    CopyFile(gameCode->sourceDllPath.D, gameCode->tempDllPath.D, FALSE);
     
-    gameCode->dll = LoadLibraryA(tempDllPath);
+    gameCode->dll = LoadLibraryA(gameCode->tempDllPath.D);
     
     if (gameCode->dll)
     {
-        gameCode->Render = (RenderDecl)GetProcAddress(gameCode->dll, "Render");
+        gameCode->UpdateAndRenderFunc = GetProcAddress(gameCode->dll, "Render");
 
-        gameCode->isValid = (bool) gameCode->Render;
+        gameCode->isValid = (bool) gameCode->UpdateAndRenderFunc;
     }
 
-    gameCode->lastWriteTime = Win32GetFileModifiedTime(sourceDllPath);
+    gameCode->lastWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
 }
 
 void Win32UnloadGameCode(game_code *gameCode)
@@ -191,17 +248,17 @@ void Win32UnloadGameCode(game_code *gameCode)
     }
 
     gameCode->isValid = false;
-    gameCode->Render = 0;
+    gameCode->UpdateAndRenderFunc = 0;
 }
 
-void Win32ReloadGameCode(game_code *gameCode, const char *sourceDllPath, const char *tempDllPath, const char *lockFilePath)
+void Win32ReloadGameCode(game_code *gameCode)
 {
-    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(sourceDllPath);
+    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
     int compareResult = CompareFileTime(&dllNewWriteTime, &gameCode->lastWriteTime);
     
     if (compareResult == 1)
     {
-        DWORD lockFileAttrib = GetFileAttributes(lockFilePath);
+        DWORD lockFileAttrib = GetFileAttributes(gameCode->lockFilePath.D);
         bool lockFilePresent = (lockFileAttrib != INVALID_FILE_ATTRIBUTES);
         
         SYSTEMTIME dllLastWriteTimeSystem;
@@ -226,8 +283,45 @@ void Win32ReloadGameCode(game_code *gameCode, const char *sourceDllPath, const c
         if (!lockFilePresent)
         {
             Win32UnloadGameCode(gameCode);
-            Win32LoadGameCode(gameCode, sourceDllPath, tempDllPath);
+            Win32LoadGameCode(gameCode);
         }
+    }
+}
+
+static_g game_code gGameCode;
+void *InitGameCode(const char *dllPath)
+{
+    simple_string dir = GetDirectoryFromPath(dllPath);
+    simple_string dllNameNoExt = GetFilenameFromPath(dllPath, false);
+    simple_string tempDllName = CatStrings(dllNameNoExt.D, "_temp.dll");
+    simple_string lockFileName = CatStrings(dllNameNoExt.D, ".lock");
+    gGameCode.sourceDllPath = SimpleString(dllPath);
+    gGameCode.tempDllPath = CatStrings(dir.D, tempDllName.D);
+    gGameCode.lockFilePath = CatStrings(dir.D, lockFileName.D);
+    
+    Win32LoadGameCode(&gGameCode);
+
+    if (gGameCode.isValid)
+    {
+        return gGameCode.UpdateAndRenderFunc;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+void *ReloadGameCode()
+{
+    Win32ReloadGameCode(&gGameCode);
+
+    if (gGameCode.isValid)
+    {
+        return gGameCode.UpdateAndRenderFunc;
+    }
+    else
+    {
+        return 0;
     }
 }
 
@@ -329,14 +423,24 @@ void DrawVertices(u32 shaderProgram, u32 vbo, u32 vao, float *vertices, int vert
     glUseProgram(0);
 }
 
-void SetWindowTitle(SDL_Window *window, const char *title)
+void SetWindowTitle(sdl_state *sdlState, const char *title)
 {
-    SDL_SetWindowTitle(window, title);
+    SDL_SetWindowTitle(sdlState->window, title);
 }
 
-void EndDraw(SDL_Window *window)
+void SetWindowTitle(const char *title)
 {
-    SDL_GL_SwapWindow(window);
+    SetWindowTitle(&gSdlState, title);
+}
+
+void EndDraw(sdl_state *sdlState)
+{
+    SDL_GL_SwapWindow(sdlState->window);
+}
+
+void EndDraw()
+{
+    EndDraw(&gSdlState);
 }
 
 #if 0
@@ -350,7 +454,7 @@ struct gl_state
     u32 vao;
 };
 
-static gl_state gGlState;
+static_g gl_state gGlState;
 
 void AddVertex(gl_state *glState, f32 X, f32 Y, f32 Z)
 {
@@ -381,4 +485,3 @@ void RenderGL()
     RenderGL(&gGlState);
 }
 #endif
-
