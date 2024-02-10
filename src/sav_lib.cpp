@@ -190,6 +190,43 @@ window_size GetWindowSize()
     return sdlState->windowSize;
 }
 
+void SetWindowBorderless(b32 borderless)
+{
+    sdl_state *sdlState = &gSdlState;
+
+    if (borderless)
+    {
+        sdlState->widthBeforeBorderless = sdlState->windowSize.width;
+        sdlState->heightBeforeBorderless = sdlState->windowSize.height;
+
+        int x, y;
+        SDL_GetWindowPosition(sdlState->window, &x, &y);
+        sdlState->xBeforeBorderless = x;
+        sdlState->yBeforeBorderless = y;
+    }
+    
+    SDL_SetWindowBordered(sdlState->window, (SDL_bool) !borderless);
+    
+    if (borderless)
+    {
+        SDL_MaximizeWindow(sdlState->window);
+    }
+    else
+    {
+        SDL_RestoreWindow(sdlState->window);
+
+        if (sdlState->widthBeforeBorderless != 0)
+        {
+            SDL_SetWindowSize(sdlState->window, sdlState->widthBeforeBorderless, sdlState->heightBeforeBorderless);
+            SDL_SetWindowPosition(sdlState->window, sdlState->xBeforeBorderless, sdlState->yBeforeBorderless);
+            sdlState->widthBeforeBorderless = 0;
+            sdlState->heightBeforeBorderless = 0;
+            sdlState-> xBeforeBorderless = 0;
+            sdlState->yBeforeBorderless = 0;
+        }
+    }
+}
+
 b32 InitAudio()
 {
     if (SDL_Init(SDL_INIT_AUDIO) == 0)

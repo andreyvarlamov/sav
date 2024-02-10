@@ -19,6 +19,8 @@ struct game_state
     u64 currentFrame;
 
     b32 mouseRel;
+
+    b32 borderless;
 };
 
 GAME_API void Render(b32 *quit, b32 reloaded, game_memory gameMemory) 
@@ -119,6 +121,12 @@ GAME_API void Render(b32 *quit, b32 reloaded, game_memory gameMemory)
     if (KeyPressed(SDL_SCANCODE_F1))
     {
         TraceLog("Window size: Orig(%d, %d), Curr(%d, %d)", GetWindowSize().originalWidth, GetWindowSize().originalHeight, GetWindowSize().width, GetWindowSize().height); 
+    }
+
+    if (KeyPressed(SDL_SCANCODE_F11))
+    {
+        gameState->borderless = !gameState->borderless;
+        SetWindowBorderless(gameState->borderless);
     }
 
     BeginDraw();

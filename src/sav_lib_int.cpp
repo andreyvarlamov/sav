@@ -7,6 +7,11 @@ struct sdl_state
     SDL_Window *window;
 
     window_size windowSize;
+    
+    i32 widthBeforeBorderless;
+    i32 heightBeforeBorderless;
+    i32 xBeforeBorderless;
+    i32 yBeforeBorderless;
 };
 
 // TODO: Technically all these could be flags in one u8 array. But I'm not sure if it's slower to do bitwise. Need to profile.

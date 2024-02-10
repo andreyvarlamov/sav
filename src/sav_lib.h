@@ -44,6 +44,7 @@ struct window_size
 SAV_API game_memory AllocGameMemory(size_t size);
 SAV_API b32 InitWindow(const char *name, int width, int height);
 SAV_API window_size GetWindowSize();
+SAV_API void SetWindowBorderless(b32 borderless);
 SAV_API void PollEvents(b32 *quit);
 SAV_API u64 GetCurrentFrame();
 SAV_API void TraceLog(const char *format, ...);
