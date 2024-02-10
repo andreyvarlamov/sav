@@ -577,7 +577,8 @@ u32 BuildShader()
         "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
         "}\n\0";
      
-    u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     
