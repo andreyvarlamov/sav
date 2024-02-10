@@ -161,6 +161,6 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
     EndDraw();
 
     char title[256];
-    sprintf_s(title, "SAV (%zu)", gameState->currentFrame++ / 10);
+    sprintf_s(title, "SAV Instantaneous: (%.3f FPS | %0.3f ms) Average: (%0.3f FPS | %0.3f ms)", GetFPSPrev(), GetDeltaPrev(), GetFPSAvg(), GetDeltaAvg());
     SetWindowTitle(title);
 }

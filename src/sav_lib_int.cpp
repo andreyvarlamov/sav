@@ -1,6 +1,7 @@
 #ifdef SAV_LIB_INT
 
 #define STRING_BUFFER 1024
+#define TIMING_STAT_AVG_COUNT 32
 
 struct sdl_state
 {
@@ -12,6 +13,13 @@ struct sdl_state
     i32 heightBeforeBorderless;
     i32 xBeforeBorderless;
     i32 yBeforeBorderless;
+
+    u64 perfCounterFreq;
+    u64 lastCounter;
+    f64 prevDelta;
+    f64 deltaSamples[TIMING_STAT_AVG_COUNT];
+    int currentTimingStatSample;
+    f64 avgDelta;
 };
 
 // TODO: Technically all these could be flags in one u8 array. But I'm not sure if it's slower to do bitwise. Need to profile.

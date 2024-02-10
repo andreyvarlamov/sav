@@ -115,6 +115,16 @@ static_i b32 Win32ReloadGameCode(game_code *gameCode)
     return false;
 }
 
+inline f64 GetAvgDelta(f64 *samples, int sampleCount)
+{
+    f64 accum = 0.0f;
+    for (int i = 0; i < sampleCount; i++)
+    {
+        accum += samples[i];
+    }
+    return accum / TIMING_STAT_AVG_COUNT;
+}
+
 //
 // NOTE: External functions
 //
@@ -160,6 +170,8 @@ b32 InitWindow(const char *windowName, int windowWidth, int windowHeight)
                 int screenWidth, screenHeight;
                 SDL_GetWindowSize(sdlState->window, &screenWidth, &screenHeight);
                 glViewport(0, 0, screenWidth, screenHeight);
+
+                sdlState->perfCounterFreq = SDL_GetPerformanceFrequency();
             }
             else
             {
@@ -312,6 +324,25 @@ void PollEvents(b32 *quit)
 {
     sdl_state *sdlState = &gSdlState;
     input_state *inputState = &gInputState;
+
+    if (sdlState->lastCounter)
+    {
+        u64 currentCounter = SDL_GetPerformanceCounter();
+        u64 counterElapsed = currentCounter - sdlState->lastCounter;
+        sdlState->lastCounter = currentCounter;
+        sdlState->prevDelta = (f64) counterElapsed / (f64) sdlState->perfCounterFreq;
+
+        sdlState->deltaSamples[sdlState->currentTimingStatSample++] = sdlState->prevDelta;
+        if (sdlState->currentTimingStatSample >= TIMING_STAT_AVG_COUNT)
+        {
+            sdlState->avgDelta = GetAvgDelta(sdlState->deltaSamples, TIMING_STAT_AVG_COUNT);
+            sdlState->currentTimingStatSample = 0;
+        }
+    }
+    else
+    {
+        sdlState->lastCounter = SDL_GetPerformanceCounter();
+    }
     
     gCurrentFrame++;
 
@@ -385,6 +416,54 @@ void PollEvents(b32 *quit)
     SDL_GetMouseState(&inputState->mousePos.x, &inputState->mousePos.y);
     SDL_GetRelativeMouseState(&inputState->mouseRelPos.x, &inputState->mouseRelPos.y);
     // TraceLog("Updated mouse: Abs(%d, %d); Rel(%d, %d)", inputState->mousePos.x, inputState->mousePos.y, inputState->mouseRelPos.x, inputState->mouseRelPos.y);
+}
+
+f64 GetDeltaFixed()
+{
+    // TODO: Fixed framerate game logic
+    return 0.16;
+}
+
+f64 GetDeltaPrev()
+{
+    sdl_state *sdlState = &gSdlState;
+    
+    return sdlState->prevDelta;
+}
+
+f64 GetDeltaAvg()
+{
+    sdl_state *sdlState = &gSdlState;
+
+    return sdlState->avgDelta;
+}
+
+f64 GetFPSPrev()
+{
+    sdl_state *sdlState = &gSdlState;
+
+    if (sdlState->prevDelta > 0.0)
+    {
+        return 1.0 / sdlState->prevDelta;
+    }
+    else
+    {
+        return 0.0;
+    }
+}
+
+f64 GetFPSAvg()
+{
+    sdl_state *sdlState = &gSdlState;
+
+    if (sdlState->avgDelta > 0.0)
+    {
+        return 1.0 / sdlState->avgDelta;
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 b32 KeyDown(int key)
