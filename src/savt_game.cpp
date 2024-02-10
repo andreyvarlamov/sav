@@ -2,6 +2,7 @@
 
 #include <varand/varand_util.h>
 #include <varand/varand_types.h>
+#include <varand/varand_memarena.h>
 
 #include <sdl2/SDL_scancode.h>
 #include <sdl2/SDL_mouse.h>
@@ -11,6 +12,10 @@
 struct game_state
 {
     b32 isInitialized;
+
+    memory_arena rootArena;
+    memory_arena worldArena;
+    memory_arena transientArena;
 
     u32 shaderProgram;
     u32 vbo;
@@ -29,6 +34,14 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
     
     if (!gameState->isInitialized)
     {
+        Assert(sizeof(game_state) < Megabytes(16));
+        u8 *rootArenaBase = (u8 *) gameMemory.data + Megabytes(16);
+        size_t rootArenaSize = gameMemory.size - Megabytes(16);
+        gameState->rootArena = MemoryArena(rootArenaBase, rootArenaSize);
+
+        gameState->worldArena = MemoryArenaNested(&gameState->rootArena, Megabytes(16));
+        gameState->transientArena = MemoryArenaNested(&gameState->rootArena, Megabytes(16));
+        
         gameState->shaderProgram = BuildShader();
         PrepareGpuData(&gameState->vbo, &gameState->vao);
 
@@ -41,6 +54,8 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
     {
         gameState->mouseRel = GetMouseRelativeMode();
     }
+
+    MemoryArena_Reset(&gameState->transientArena);
 
     if (KeyDown(SDL_SCANCODE_1))
     {

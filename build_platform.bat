@@ -31,7 +31,8 @@ rem Compiler Warning Options
     rem /wd4996 -- using deprecated functions like fopen, not fopen_s
     rem /wd4456 -- hiding previous declaration (to compile with raygui.h)
     rem /wd4267 -- conversion with possible loss of data - from size_t
-set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505
+    rem /wd4127 -- conditional expression is constant
+set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505 /wd4127
 
 rem Linker options
     rem /libpath

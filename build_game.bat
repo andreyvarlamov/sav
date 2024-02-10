@@ -10,7 +10,7 @@ set bindir=%rootdir%bin
 set srcdir=%rootdir%src
 
 set copt=/IC:\dev\shared\include /MDd /LDd /Z7 /Od /Oi /FC /GR- /nologo
-set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505
+set cwopt=/WX /W4 /wd4201 /wd4100 /wd4189 /wd4505 /wd4127
 set llib=sav_lib.lib
 set lopt=/libpath:%libsdir% /debug /opt:ref /incremental:no
 
