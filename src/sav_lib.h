@@ -49,7 +49,7 @@ SAV_API void PollEvents(b32 *quit);
 SAV_API u64 GetCurrentFrame();
 SAV_API void TraceLog(const char *format, ...);
 SAV_API void Quit();
-SAV_API b32 InitGameCode(const char *dllPath, void **updateAndRenderFunc);
+SAV_API b32 InitGameCode(const char *dllPath, const char *funcName, void **updateAndRenderFunc);
 SAV_API b32 ReloadGameCode(void **updateAndRenderFunc);
 SAV_API u32 BuildShader();
 SAV_API void PrepareGpuData(u32 *vbo, u32 *vao);

@@ -23,7 +23,7 @@ struct game_state
     b32 borderless;
 };
 
-GAME_API void Render(b32 *quit, b32 reloaded, game_memory gameMemory) 
+GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory) 
 {
     game_state *gameState = (game_state *) gameMemory.data;
     

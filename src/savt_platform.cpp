@@ -8,16 +8,16 @@
 #include <cstdio>
 #include <cstdlib>
 
-typedef void (*RenderDecl)(b32 *quit, b32 reloaded, game_memory gameMemory);
+typedef void (*UpdateAndRenderDecl)(b32 *quit, b32 reloaded, game_memory gameMemory);
 
-static RenderDecl Render;
+static UpdateAndRenderDecl UpdateAndRender;
 
 int main(int argc, char **argv)
 {
     InitWindow("SAV", 1920, 1080);
 
     // RenderDecl *RenderPtr = &Render;
-    InitGameCode("bin/savt_game.dll", (void **) &Render);
+    InitGameCode("bin/savt_game.dll", "UpdateAndRender", (void **) &UpdateAndRender);
 
     game_memory gameMemory = AllocGameMemory(Megabytes(128));
 
@@ -31,11 +31,11 @@ int main(int argc, char **argv)
             quit = true;
         }
 
-        b32 reloaded = ReloadGameCode((void **) &Render);
+        b32 reloaded = ReloadGameCode((void **) &UpdateAndRender);
                         
-        if (Render)
+        if (UpdateAndRender)
         {
-            Render(&quit, reloaded, gameMemory);
+            UpdateAndRender(&quit, reloaded, gameMemory);
         }
     }
 

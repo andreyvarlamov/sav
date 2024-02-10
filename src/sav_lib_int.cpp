@@ -42,7 +42,8 @@ struct game_code
     simple_string sourceDllPath;
     simple_string tempDllPath;
     simple_string lockFilePath;
-    
+
+    simple_string funcName;
     void *UpdateAndRenderFunc;
 };
 

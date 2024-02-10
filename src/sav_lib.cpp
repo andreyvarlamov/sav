@@ -53,7 +53,7 @@ static_i b32 Win32LoadGameCode(game_code *gameCode)
     
     if (gameCode->dll)
     {
-        gameCode->UpdateAndRenderFunc = GetProcAddress(gameCode->dll, "Render");
+        gameCode->UpdateAndRenderFunc = GetProcAddress(gameCode->dll, gameCode->funcName.D);
 
         gameCode->isValid = (bool) gameCode->UpdateAndRenderFunc;
         gameCode->lastWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
@@ -498,7 +498,7 @@ void Quit()
     Quit(&gSdlState);
 }
 
-b32 InitGameCode(const char *dllPath, void **updateAndRenderFunc)
+b32 InitGameCode(const char *dllPath, const char *funcName, void **updateAndRenderFunc)
 {
     game_code *gameCode = &gGameCode;
     
@@ -509,6 +509,7 @@ b32 InitGameCode(const char *dllPath, void **updateAndRenderFunc)
     gameCode->sourceDllPath = SimpleString(dllPath);
     gameCode->tempDllPath = CatStrings(dir.D, tempDllName.D);
     gameCode->lockFilePath = CatStrings(dir.D, lockFileName.D);
+    gameCode->funcName = SimpleString(funcName);
     
     int loaded = Win32LoadGameCode(gameCode);
 
@@ -576,7 +577,7 @@ u32 BuildShader()
         "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
         "}\n\0";
      
-    u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     
