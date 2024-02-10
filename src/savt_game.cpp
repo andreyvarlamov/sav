@@ -26,6 +26,9 @@ struct game_state
     b32 mouseRel;
 
     b32 borderless;
+
+    f32 triX;
+    f32 triY;
 };
 
 GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory) 
@@ -144,34 +147,50 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
         SetWindowBorderless(gameState->borderless);
     }
 
+    f32 rate = 1.0f;
+    if (KeyDown(SDL_SCANCODE_W))
+    {
+        gameState->triY += rate * (f32) GetDeltaPrev();
+    }
+    if (KeyDown(SDL_SCANCODE_S))
+    {
+        gameState->triY -= rate * (f32) GetDeltaPrev();
+    }
+    if (KeyDown(SDL_SCANCODE_A))
+    {
+        gameState->triX -= rate * (f32) GetDeltaPrev();
+    }
+    if (KeyDown(SDL_SCANCODE_D))
+    {
+        gameState->triX += rate * (f32) GetDeltaPrev();
+    }
+
+    if (gameState->triX >= 1.0f)
+    {
+        gameState->triX = -1.0f;
+    }
+    else if (gameState->triX <= -1.0f)
+    {
+        gameState->triX = 1.0f;
+    }
+    if (gameState->triY >= 1.0f)
+    {
+        gameState->triY = -1.0f;
+    }
+    else if (gameState->triY <= -1.0f)
+    {
+        gameState->triY = 1.0f;
+    }
+
     BeginDraw();
     {
-        if ((gameState->currentFrame / 100) % 2 == 0)
-        {
-            float triangle[] = {
-                // -0.5f, -1.0f, 0.0f,
-                // -1.0f, 1.0f, 0.0f,
-                // 0.0f, 1.0f, 0.0f,
-                0.0f, -1.0f, 0.0f,
-                0.0f, 1.0f, 0.0f,
-                1.0f, 1.0f, 0.0f
-            };
+        float triangle[] = {
+            gameState->triX + 0.0f, gameState->triY + 0.1f, 0.0f,
+            gameState->triX + 0.1f, gameState->triY - 0.1f, 0.0f,
+            gameState->triX - 0.1f, gameState->triY - 0.1f, 0.0,
+        };
     
-            DrawVertices(gameState->shaderProgram, gameState->vbo, gameState->vao, triangle, ArrayCount(triangle) / 3);
-        }
-        else
-        {
-            float triangle[] = {
-                -0.5f, -1.0f, 0.0f,
-                -1.0f, 1.0f, 0.0f,
-                0.0f, 1.0f, 0.0f,
-                // 0.0f, -1.0f, 0.0f,
-                // 0.0f, 1.0f, 0.0f,
-                // 1.0f, 1.0f, 0.0f
-            };
-    
-            DrawVertices(gameState->shaderProgram, gameState->vbo, gameState->vao, triangle, ArrayCount(triangle) / 3);
-        }
+        DrawVertices(gameState->shaderProgram, gameState->vbo, gameState->vao, triangle, ArrayCount(triangle) / 3);
     }
     EndDraw();
 

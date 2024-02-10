@@ -1,3 +1,5 @@
+*.savdump
+
 temp_ignore
 
 *.sublime-workspace

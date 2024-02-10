@@ -22,6 +22,13 @@ struct sdl_state
     f64 avgDelta;
 };
 
+struct win32_state
+{
+    HANDLE dumpMemoryFileHandle;
+    HANDLE dumpMemoryMap;
+    void *dumpMemoryBlock;
+};
+
 // TODO: Technically all these could be flags in one u8 array. But I'm not sure if it's slower to do bitwise. Need to profile.
 struct input_state
 {
@@ -68,6 +75,7 @@ struct gl_state
 #endif
 
 static_g sdl_state gSdlState;
+static_g win32_state gWin32State;
 static_g game_code gGameCode;
 static_g input_state gInputState = {};
 #if 0

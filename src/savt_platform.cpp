@@ -31,6 +31,16 @@ int main(int argc, char **argv)
             quit = true;
         }
 
+        if (KeyPressed(SDL_SCANCODE_F5))
+        {
+            DumpGameMemory(gameMemory);
+        }
+
+        if (KeyPressed(SDL_SCANCODE_F7))
+        {
+            ReloadGameMemoryDump(gameMemory);
+        }
+
         b32 reloaded = ReloadGameCode((void **) &UpdateAndRender);
                         
         if (UpdateAndRender)

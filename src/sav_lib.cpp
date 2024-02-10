@@ -129,6 +129,40 @@ inline f64 GetAvgDelta(f64 *samples, int sampleCount)
 // NOTE: External functions
 //
 
+void DumpGameMemory(game_memory gameMemory)
+{
+    win32_state *win32State = &gWin32State;
+    game_code *gameCode = &gGameCode;
+
+    if (win32State->dumpMemoryBlock == NULL)
+    {
+        simple_string dir = GetDirectoryFromPath(gameCode->sourceDllPath.D);
+        simple_string dllNameNoExt = GetFilenameFromPath(gameCode->sourceDllPath.D, false);
+        simple_string dumpFileName = CatStrings(dllNameNoExt.D, "_mem.savdump");
+        simple_string dumpFilePath = CatStrings(dir.D, dumpFileName.D);
+
+        win32State->dumpMemoryFileHandle = CreateFileA(dumpFilePath.D, GENERIC_READ|GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    
+        LARGE_INTEGER maxSize;
+        maxSize.QuadPart = gameMemory.size;
+        win32State->dumpMemoryMap = CreateFileMapping(win32State->dumpMemoryFileHandle,
+                                                      0, PAGE_READWRITE, maxSize.HighPart, maxSize.LowPart, 0);
+        win32State->dumpMemoryBlock = MapViewOfFile(win32State->dumpMemoryMap, FILE_MAP_ALL_ACCESS, 0, 0, gameMemory.size);
+    }
+    
+    CopyMemory(win32State->dumpMemoryBlock, gameMemory.data, gameMemory.size);
+}
+
+void ReloadGameMemoryDump(game_memory gameMemory)
+{
+    win32_state *win32State = &gWin32State;
+    
+    if (win32State->dumpMemoryBlock)
+    {
+        CopyMemory(gameMemory.data, win32State->dumpMemoryBlock, gameMemory.size);
+    }
+}
+
 game_memory AllocGameMemory(size_t size)
 {
     game_memory gameMemory;

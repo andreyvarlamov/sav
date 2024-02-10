@@ -41,6 +41,9 @@ struct window_size
     int originalHeight;
 };
 
+SAV_API void DumpGameMemory(game_memory gameMemory);
+SAV_API void ReloadGameMemoryDump(game_memory gameMemory);
+
 SAV_API game_memory AllocGameMemory(size_t size);
 SAV_API b32 InitWindow(const char *name, int width, int height);
 SAV_API window_size GetWindowSize();
