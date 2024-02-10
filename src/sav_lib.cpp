@@ -13,7 +13,14 @@
 
 #include <cstdio>
 
-void *Win32AllocMemory(size_t size)
+#define SAV_LIB_INT
+#include "sav_lib_int.cpp"
+
+//
+// NOTE: Internal functions
+//
+
+static_i void *Win32AllocMemory(size_t size)
 {
     void *memory = VirtualAlloc(0, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
@@ -25,6 +32,93 @@ void *Win32AllocMemory(size_t size)
     return memory;
 }
 
+static_i FILETIME Win32GetFileModifiedTime(const char *filePath)
+{
+    FILETIME lastWriteTime = {};
+    
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (GetFileAttributesEx(filePath, GetFileExInfoStandard, &data))
+    {
+        lastWriteTime = data.ftLastWriteTime;
+    }
+
+    return lastWriteTime;
+}
+
+static_i b32 Win32LoadGameCode(game_code *gameCode)
+{
+    CopyFile(gameCode->sourceDllPath.D, gameCode->tempDllPath.D, FALSE);
+    
+    gameCode->dll = LoadLibraryA(gameCode->tempDllPath.D);
+    
+    if (gameCode->dll)
+    {
+        gameCode->UpdateAndRenderFunc = GetProcAddress(gameCode->dll, "Render");
+
+        gameCode->isValid = (bool) gameCode->UpdateAndRenderFunc;
+        gameCode->lastWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
+
+        return true;
+    }
+
+    return false;
+}
+
+static_i void Win32UnloadGameCode(game_code *gameCode)
+{
+    if (gameCode->dll)
+    {
+        FreeLibrary(gameCode->dll);
+        gameCode->dll = 0;
+    }
+
+    gameCode->isValid = false;
+    gameCode->UpdateAndRenderFunc = 0;
+}
+
+static_i b32 Win32ReloadGameCode(game_code *gameCode)
+{
+    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
+    int compareResult = CompareFileTime(&dllNewWriteTime, &gameCode->lastWriteTime);
+    
+    if (compareResult == 1)
+    {
+        DWORD lockFileAttrib = GetFileAttributes(gameCode->lockFilePath.D);
+        bool lockFilePresent = (lockFileAttrib != INVALID_FILE_ATTRIBUTES);
+        
+        SYSTEMTIME dllLastWriteTimeSystem;
+        int result = FileTimeToSystemTime(&gameCode->lastWriteTime, &dllLastWriteTimeSystem);
+                        
+        SYSTEMTIME dllNewWriteTimeSystem;
+        result = FileTimeToSystemTime(&dllNewWriteTime, &dllNewWriteTimeSystem);
+
+        printf("Old: %02d:%02d:%02d:%03d | New: %02d:%02d:%02d:%03d. Result: %d. Lock file present: %d\n",
+               dllLastWriteTimeSystem.wHour,
+               dllLastWriteTimeSystem.wMinute,
+               dllLastWriteTimeSystem.wSecond,
+               dllLastWriteTimeSystem.wMilliseconds,
+               dllNewWriteTimeSystem.wHour,
+               dllNewWriteTimeSystem.wMinute,
+               dllNewWriteTimeSystem.wSecond,
+               dllNewWriteTimeSystem.wMilliseconds,
+               compareResult,
+               lockFilePresent);
+ 
+        // NOTE: Check lock file is not present (if present - rebuild is not done yet)
+        if (!lockFilePresent)
+        {
+            Win32UnloadGameCode(gameCode);
+            return Win32LoadGameCode(gameCode);
+        }
+    }
+
+    return false;
+}
+
+//
+// NOTE: External functions
+//
+
 game_memory AllocGameMemory(size_t size)
 {
     game_memory gameMemory;
@@ -33,15 +127,10 @@ game_memory AllocGameMemory(size_t size)
     return gameMemory;
 }
 
-struct sdl_state
+b32 InitWindow(const char *windowName, int windowWidth, int windowHeight)
 {
-    SDL_Window *window;
-    int windowWidth;
-    int windowHeight;
-};
-
-b32 InitWindow(sdl_state *sdlState, const char *windowName, int windowWidth, int windowHeight)
-{
+    sdl_state *sdlState = &gSdlState;
+    
     if (SDL_Init(SDL_INIT_VIDEO) == 0)
     {
         SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
@@ -49,12 +138,12 @@ b32 InitWindow(sdl_state *sdlState, const char *windowName, int windowWidth, int
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        sdlState->windowWidth = windowWidth;
-        sdlState->windowHeight = windowHeight;
+        sdlState->windowSize.originalWidth = sdlState->windowSize.width = windowWidth;
+        sdlState->windowSize.originalHeight = sdlState->windowSize.height = windowHeight;
         sdlState->window = SDL_CreateWindow(windowName,
-                                            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                            sdlState->windowWidth, sdlState->windowHeight,
-                                            SDL_WINDOW_OPENGL);// | SDL_WINDOW_RESIZABLE);
+                                            3160, 40,
+                                            sdlState->windowSize.width, sdlState->windowSize.height,
+                                            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
         if (sdlState->window)
         {
@@ -94,10 +183,11 @@ b32 InitWindow(sdl_state *sdlState, const char *windowName, int windowWidth, int
     return true;
 }
 
-static_g sdl_state gSdlState;
-b32 InitWindow(const char *name, int width, int height)
+window_size GetWindowSize()
 {
-    return InitWindow(&gSdlState, name, width, height);
+    sdl_state *sdlState = &gSdlState;
+
+    return sdlState->windowSize;
 }
 
 b32 InitAudio()
@@ -165,23 +255,197 @@ void FreeSoundChunk(sound_chunk chunk)
     Mix_FreeChunk((Mix_Chunk *) chunk.sound);
 }
 
+u64 GetCurrentFrame()
+{
+    return gCurrentFrame;
+}
+
+void TraceLog(const char *format, ...)
+{
+    char formatBuf[STRING_BUFFER];
+    sprintf_s(formatBuf, "[F %06zu] %s\n", gCurrentFrame, format);
+    
+    va_list varArgs;
+    va_start(varArgs, format);
+    vprintf_s(formatBuf, varArgs);
+    va_end(varArgs);
+}
+
 void PollEvents(b32 *quit)
 {
+    sdl_state *sdlState = &gSdlState;
+    input_state *inputState = &gInputState;
+    
+    gCurrentFrame++;
+
+    for (int i = 0; i < SDL_NUM_SCANCODES; i++)
+    {
+        inputState->repeatKeyStates[i] = 0;
+
+        inputState->previousKeyStates[i] = inputState->currentKeyStates[i];
+    }
+
+    for (int i = 0; i < SDL_BUTTON_X2 + 1; i++)
+    {
+        inputState->clickMouseButtonStates[i] = 0;
+
+        inputState->previousMouseButtonStates[i] = inputState->currentMouseButtonStates[i];
+    }
+
+    inputState->mouseWheel = 0;
+    
     SDL_Event event;
     while(SDL_PollEvent(&event))
     {
-        if (event.type == SDL_QUIT)
+        switch (event.type)
         {
-            *quit = true;
+            case SDL_QUIT:
+            {
+                *quit = true;
+            } break;
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+            {
+                inputState->currentKeyStates[event.key.keysym.scancode] = (event.type == SDL_KEYDOWN);
+                inputState->repeatKeyStates[event.key.keysym.scancode] = event.key.repeat;
+            } break;
+            case SDL_MOUSEMOTION:
+            {
+                // TraceLog("SDL_MOUSEMOTION: Abs(%d, %d); Rel(%d, %d)", event.motion.x, event.motion.y, event.motion.xrel, event.motion.yrel);
+                // NOTE: It seems it's better to update mouse position every frame
+            } break;
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            {
+                // TraceLog("%s: %d, %d, %d", event.type == SDL_MOUSEBUTTONDOWN ? "SDL_MOUSEBUTTONDOWN" : "SDL_MOUSEBUTTONUP", event.button.button, event.button.state, event.button.clicks);
+                inputState->currentMouseButtonStates[event.button.button] = (event.type == SDL_MOUSEBUTTONDOWN);
+                if (event.type == SDL_MOUSEBUTTONDOWN)
+                {
+                    inputState->clickMouseButtonStates[event.button.button] = event.button.clicks;
+                }
+            } break;
+            case SDL_MOUSEWHEEL:
+            {
+                // TODO: Maybe deal with event.wheel.direction field on other platforms
+                // TraceLog("SDL_MOUSE_WHELL: %d, %d; %f, %f", event.wheel.x, event.wheel.y, event.wheel.preciseX, event.wheel.preciseY);
+                inputState->mouseWheel += event.wheel.y; // NOTE: Add y, because it's likely there were more than one event between frames
+            } break;
+            case SDL_WINDOWEVENT:
+            {
+                if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+                {
+                    sdlState->windowSize.width = event.window.data1;
+                    sdlState->windowSize.height = event.window.data2;
+                    glViewport(0, 0, sdlState->windowSize.width, sdlState->windowSize.height);
+                    // TODO: Update projection matrices
+                    // TraceLog("Window resized: %d x %d\n", sdlState->windowSize.width, sdlState->windowSize.height);
+                }
+            } break;
+            default: break;
         }
     }
+
+    SDL_GetMouseState(&inputState->mousePos.x, &inputState->mousePos.y);
+    SDL_GetRelativeMouseState(&inputState->mouseRelPos.x, &inputState->mouseRelPos.y);
+    // TraceLog("Updated mouse: Abs(%d, %d); Rel(%d, %d)", inputState->mousePos.x, inputState->mousePos.y, inputState->mouseRelPos.x, inputState->mouseRelPos.y);
 }
 
-const u8 *GetSdlKeyboardState()
+b32 KeyDown(int key)
 {
-    return SDL_GetKeyboardState(0);
+    input_state *inputState = &gInputState;
+
+    return (b32) inputState->currentKeyStates[key];
 }
 
+b32 KeyPressed(int key)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) (inputState->currentKeyStates[key] && !inputState->previousKeyStates[key]);
+}
+
+b32 KeyReleased(int key)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) (!inputState->currentKeyStates[key] && inputState->previousKeyStates[key]);
+}
+
+b32 KeyRepeat(int key)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) inputState->repeatKeyStates[key];
+}
+
+b32 KeyPressedOrRepeat(int key)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) ((inputState->currentKeyStates[key] && !inputState->previousKeyStates[key]) || inputState->repeatKeyStates[key]);
+}
+
+b32 GetMouseRelativeMode()
+{
+    return (b32) SDL_GetRelativeMouseMode();
+}
+
+void SetMouseRelativeMode(b32 enabled)
+{
+    input_state *inputState = &gInputState;
+    inputState->isRelMouse = enabled;
+    SDL_SetRelativeMouseMode((SDL_bool) inputState->isRelMouse);
+}
+
+mouse_pos GetMousePos()
+{
+    input_state *inputState = &gInputState;
+
+    return inputState->mousePos;
+}
+
+mouse_pos GetMouseRelPos()
+{
+    input_state *inputState = &gInputState;
+
+    return inputState->mouseRelPos;
+}
+
+b32 MouseDown(int button)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) inputState->currentMouseButtonStates[button];
+}
+
+b32 MousePressed(int button)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) (inputState->currentMouseButtonStates[button] && !inputState->previousMouseButtonStates[button]);
+}
+
+b32 MouseReleased(int button)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) (!inputState->currentMouseButtonStates[button] && inputState->previousMouseButtonStates[button]);
+}
+
+b32 MouseClicks(int button, int clicks)
+{
+    input_state *inputState = &gInputState;
+
+    return (b32) (inputState->clickMouseButtonStates[button] == clicks);
+}
+
+i32 MouseWheel()
+{
+    input_state *inputState = &gInputState;
+    
+    return inputState->mouseWheel;
+}
+ 
 void Quit(sdl_state *sdlState)
 {
    if (sdlState->window)
@@ -197,132 +461,51 @@ void Quit()
     Quit(&gSdlState);
 }
 
-struct game_code
+b32 InitGameCode(const char *dllPath, void **updateAndRenderFunc)
 {
-    b32 isValid;
-    HMODULE dll;
-    FILETIME lastWriteTime;
-
-    simple_string sourceDllPath;
-    simple_string tempDllPath;
-    simple_string lockFilePath;
+    game_code *gameCode = &gGameCode;
     
-    void *UpdateAndRenderFunc;
-};
-
-static FILETIME Win32GetFileModifiedTime(const char *filePath)
-{
-    FILETIME lastWriteTime = {};
-    
-    WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesEx(filePath, GetFileExInfoStandard, &data))
-    {
-        lastWriteTime = data.ftLastWriteTime;
-    }
-
-    return lastWriteTime;
-}
-
-void Win32LoadGameCode(game_code *gameCode)
-{
-    CopyFile(gameCode->sourceDllPath.D, gameCode->tempDllPath.D, FALSE);
-    
-    gameCode->dll = LoadLibraryA(gameCode->tempDllPath.D);
-    
-    if (gameCode->dll)
-    {
-        gameCode->UpdateAndRenderFunc = GetProcAddress(gameCode->dll, "Render");
-
-        gameCode->isValid = (bool) gameCode->UpdateAndRenderFunc;
-    }
-
-    gameCode->lastWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
-}
-
-void Win32UnloadGameCode(game_code *gameCode)
-{
-    if (gameCode->dll)
-    {
-        FreeLibrary(gameCode->dll);
-        gameCode->dll = 0;
-    }
-
-    gameCode->isValid = false;
-    gameCode->UpdateAndRenderFunc = 0;
-}
-
-void Win32ReloadGameCode(game_code *gameCode)
-{
-    FILETIME dllNewWriteTime = Win32GetFileModifiedTime(gameCode->sourceDllPath.D);
-    int compareResult = CompareFileTime(&dllNewWriteTime, &gameCode->lastWriteTime);
-    
-    if (compareResult == 1)
-    {
-        DWORD lockFileAttrib = GetFileAttributes(gameCode->lockFilePath.D);
-        bool lockFilePresent = (lockFileAttrib != INVALID_FILE_ATTRIBUTES);
-        
-        SYSTEMTIME dllLastWriteTimeSystem;
-        int result = FileTimeToSystemTime(&gameCode->lastWriteTime, &dllLastWriteTimeSystem);
-                        
-        SYSTEMTIME dllNewWriteTimeSystem;
-        result = FileTimeToSystemTime(&dllNewWriteTime, &dllNewWriteTimeSystem);
-
-        printf("Old: %02d:%02d:%02d:%03d | New: %02d:%02d:%02d:%03d. Result: %d. Lock file present: %d\n",
-               dllLastWriteTimeSystem.wHour,
-               dllLastWriteTimeSystem.wMinute,
-               dllLastWriteTimeSystem.wSecond,
-               dllLastWriteTimeSystem.wMilliseconds,
-               dllNewWriteTimeSystem.wHour,
-               dllNewWriteTimeSystem.wMinute,
-               dllNewWriteTimeSystem.wSecond,
-               dllNewWriteTimeSystem.wMilliseconds,
-               compareResult,
-               lockFilePresent);
- 
-        // NOTE: Check lock file is not present (if present - rebuild is not done yet)
-        if (!lockFilePresent)
-        {
-            Win32UnloadGameCode(gameCode);
-            Win32LoadGameCode(gameCode);
-        }
-    }
-}
-
-static_g game_code gGameCode;
-void *InitGameCode(const char *dllPath)
-{
     simple_string dir = GetDirectoryFromPath(dllPath);
     simple_string dllNameNoExt = GetFilenameFromPath(dllPath, false);
     simple_string tempDllName = CatStrings(dllNameNoExt.D, "_temp.dll");
     simple_string lockFileName = CatStrings(dllNameNoExt.D, ".lock");
-    gGameCode.sourceDllPath = SimpleString(dllPath);
-    gGameCode.tempDllPath = CatStrings(dir.D, tempDllName.D);
-    gGameCode.lockFilePath = CatStrings(dir.D, lockFileName.D);
+    gameCode->sourceDllPath = SimpleString(dllPath);
+    gameCode->tempDllPath = CatStrings(dir.D, tempDllName.D);
+    gameCode->lockFilePath = CatStrings(dir.D, lockFileName.D);
     
-    Win32LoadGameCode(&gGameCode);
+    int loaded = Win32LoadGameCode(gameCode);
 
-    if (gGameCode.isValid)
+    if (loaded)
     {
-        return gGameCode.UpdateAndRenderFunc;
+        *updateAndRenderFunc = gameCode->UpdateAndRenderFunc;
     }
     else
     {
-        return 0;
+        *updateAndRenderFunc = 0;
     }
+
+    return loaded;
 }
 
-void *ReloadGameCode()
+b32 ReloadGameCode(void **updateAndRenderFunc)
 {
-    Win32ReloadGameCode(&gGameCode);
+    game_code *gameCode = &gGameCode;
 
-    if (gGameCode.isValid)
+    b32 reloaded = Win32ReloadGameCode(gameCode);
+
+    if (reloaded)
     {
-        return gGameCode.UpdateAndRenderFunc;
+        if (gameCode->isValid)
+        {
+            *updateAndRenderFunc = gameCode->UpdateAndRenderFunc;
+        }
+        else
+        {
+            *updateAndRenderFunc = 0;
+        }
     }
-    else
-    {
-        return 0;
-    }
+
+    return reloaded;
 }
 
 u32 BuildShader()
@@ -423,48 +606,34 @@ void DrawVertices(u32 shaderProgram, u32 vbo, u32 vao, float *vertices, int vert
     glUseProgram(0);
 }
 
-void SetWindowTitle(sdl_state *sdlState, const char *title)
-{
-    SDL_SetWindowTitle(sdlState->window, title);
-}
-
 void SetWindowTitle(const char *title)
 {
-    SetWindowTitle(&gSdlState, title);
-}
-
-void EndDraw(sdl_state *sdlState)
-{
-    SDL_GL_SwapWindow(sdlState->window);
+    sdl_state *sdlState = &gSdlState;
+    
+    SDL_SetWindowTitle(sdlState->window, title);
 }
 
 void EndDraw()
 {
-    EndDraw(&gSdlState);
+    sdl_state *sdlState = &gSdlState;
+    
+    SDL_GL_SwapWindow(sdlState->window);
 }
 
 #if 0
-struct gl_state
+void AddVertex(f32 X, f32 Y, f32 Z)
 {
-    f32 *vertices;
-    i32 vertexCount;
-    i32 maxVertexCount;
-    u32 shaderProgram;
-    u32 vbo;
-    u32 vao;
-};
-
-static_g gl_state gGlState;
-
-void AddVertex(gl_state *glState, f32 X, f32 Y, f32 Z)
-{
+    gl_state *glState = &gGlState;
+    
     glState->vertices[glState->vertexCount++] = X;
     glState->vertices[glState->vertexCount++] = Y;
     glState->vertices[glState->vertexCount++] = Z;
 }
 
-void RenderGL(gl_state *glState)
+void RenderGL()
 {
+    gl_state *glState = &gGlState;
+    
     glBindBuffer(GL_ARRAY_BUFFER, glState->vbo);
     glBufferData(GL_ARRAY_BUFFER, glState->vertexCount * sizeof(f32), glState->vertices, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -473,15 +642,5 @@ void RenderGL(gl_state *glState)
     glBindVertexArray(glState->vao);
     glDrawArrays(GL_TRIANGLES, 0, glState->vertices);
     glBindVertexArray(0);
-}
-
-void AddVertex(f32 X, f32 Y, f32 Z)
-{
-    AddVertex(&gGlState, X, Y, Z);
-}
-
-void RenderGL()
-{
-    RenderGL(&gGlState);
 }
 #endif
