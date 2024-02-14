@@ -2,6 +2,7 @@
 #define SAV_LIB_H
 
 #include <varand/varand_types.h>
+#include <varand/varand_linmath.h>
 
 #ifdef SAV_EXPORTS
 #define SAV_API extern "C" __declspec(dllexport)
@@ -61,10 +62,13 @@ SAV_API void TraceLog(const char *Format, ...);
 SAV_API void Quit();
 SAV_API b32 InitGameCode(const char *DllPath, const char *FuncName, void **UpdateAndRenderFunc);
 SAV_API b32 ReloadGameCode(void **UpdateAndRenderFunc);
-SAV_API u32 BuildShader();
-SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO);
+SAV_API u32 BuildBasicShader();
+SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO);
 SAV_API void BeginDraw();
-SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, float *Vertices, int VertexCount);
+SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
+                          vec3 *Positions, vec2 *TexCoords, vec3 *Colors, u32 *Indices,
+                          int VertexCount, int IndexCount);
+SAV_API u32 LoadTexture(const char *Path);
 SAV_API void SetWindowTitle(const char *Title);
 SAV_API void EndDraw();
 

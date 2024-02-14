@@ -2,6 +2,7 @@
 
 #include <varand/varand_util.h>
 #include <varand/varand_sstring.h>
+#include <varand/varand_linmath.h>
 
 #include <windows.h>
 
@@ -10,6 +11,7 @@
 
 #include <sdl2/SDL.h>
 #include <sdl2/SDL_mixer.h>
+#include <sdl2/SDL_image.h>
 
 #include <cstdio>
 
@@ -206,6 +208,15 @@ b32 InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 glViewport(0, 0, ScreenWidth, ScreenHeight);
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
+
+                i32 SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
+                i32 IMGInitResult = IMG_Init(SDLImageFlags);
+                if (!(IMGInitResult & SDLImageFlags))
+                {
+                    printf("SDL failed to init SDL_image\n");
+                    return false;
+                }
+
             }
             else
             {
@@ -659,14 +670,22 @@ b32 ReloadGameCode(void **UpdateAndRenderFunc)
     return Reloaded;
 }
 
-u32 BuildShader()
+u32 BuildBasicShader()
 {
     const char *vertexShaderSource =
         "#version 330 core\n"
-        "layout (location = 0) in vec3 aPos;\n"
+        "layout (location = 0) in vec3 vertPosition;\n"
+        "layout (location = 1) in vec2 vertTexCoord;\n"
+        "layout (location = 2) in vec4 vertColor;\n"
+        "out vec2 fragTexCoord;\n"
+        "out vec4 fragColor;\n"
+        "uniform mat4 mvp;\n"
         "void main()\n"
         "{\n"
-        "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+        "   fragTexCoord = vertTexCoord;\n"
+        "   fragColor = vertColor;\n"
+        // "   gl_Position = mvp * vec4(vertPosition, 1.0);\n"
+        "   gl_Position = vec4(vertPosition, 1.0);\n"
         "}\0";
     
     u32 vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -684,10 +703,17 @@ u32 BuildShader()
     
     const char *fragmentShaderSource =
         "#version 330 core\n"
-        "out vec4 FragColor;\n"
+        "in vec2 fragTexCoord;\n"
+        "in vec4 fragColor;\n"
+        "out vec4 finalColor;\n"
+        "uniform sampler2D texture0;\n"
+        "uniform vec4 colorDiffuse;\n"
         "void main()\n"
         "{\n"
-        "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+        "   vec4 texelColor = texture(texture0, fragTexCoord);\n"
+        // "   finalColor = texelColor * colorDiffuse * fragColor;\n"
+        "   finalColor = texelColor;\n"
+        // "   finalColor = vec4(1.0);\n"
         "}\n\0";
      
     u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -718,25 +744,38 @@ u32 BuildShader()
     return shaderProgram;
 }
 
-void PrepareGpuData(u32 *vbo, u32 *vao)
-{
-    glGenBuffers(1, vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-    glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float), 0, GL_STATIC_DRAW);
-    // GLint bufferSize;
-    // glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &bufferSize);
-    // printf("Original buffer size: %d\n", bufferSize);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+#define GPU_VERT_COUNT 8192
+#define GPU_INDEX_COUNT 32768
 
-    glGenVertexArrays(1, vao);
-    glBindVertexArray(*vao);
+void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
+{
+    u32 MaxVertCount = GPU_VERT_COUNT;
+    size_t BytesPerVertex = (3 + 2 + 4) * sizeof(float);
+    
+    glGenVertexArrays(1, VAO);
+    Assert(*VAO);
+    glBindVertexArray(*VAO);
                     
-    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glGenBuffers(1, VBO);
+    Assert(*VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, *VBO);
+    glBufferData(GL_ARRAY_BUFFER, MaxVertCount * BytesPerVertex, 0, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
     glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *) (MaxVertCount * 3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (MaxVertCount * 5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glGenBuffers(1, EBO);
+    Assert(*EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GPU_INDEX_COUNT * sizeof(u32), 0, GL_DYNAMIC_DRAW);
 
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
 }
 
 void BeginDraw()
@@ -745,17 +784,81 @@ void BeginDraw()
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void DrawVertices(u32 shaderProgram, u32 vbo, u32 vao, float *vertices, int vertexCount)
+void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
+                  vec3 *Positions, vec2 *TexCoords, vec3 *Colors, u32 *Indices,
+                  int VertexCount, int IndexCount)
 {
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, vertexCount * 3 * sizeof(*vertices), vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    Assert(Positions);
+    Assert(VertexCount > 0);
     
-    glUseProgram(shaderProgram);
-    glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+    u32 MaxVertCount = GPU_VERT_COUNT;
+    
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
+    {
+        glBufferSubData(GL_ARRAY_BUFFER, 0,                                VertexCount * 3 * sizeof(float), Positions);
+    }
+    if (TexCoords)
+    {
+        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount * 3 * sizeof(float), VertexCount * 2 * sizeof(float), TexCoords);
+    }
+    if (Colors)
+    {
+        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount * 5 * sizeof(float), VertexCount * 4 * sizeof(float), Colors);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, IndexCount * sizeof(float), Indices);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+    glUseProgram(ShaderProgram);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, IndexCount, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+
     glUseProgram(0);
+}
+
+u32
+LoadTextureFromData(void *ImageData, u32 Width, u32 Height, u32 Pitch, u32 BytesPerPixel)
+{
+    // TODO: Handle different image data formats better
+    Assert(Width * BytesPerPixel == Pitch);
+    Assert(BytesPerPixel == 4 || BytesPerPixel == 3);
+    
+    u32 TextureID;
+
+    glGenTextures(1, &TextureID);
+    Assert(TextureID);
+    glBindTexture(GL_TEXTURE_2D, TextureID);
+    u32 InternalFormat = (BytesPerPixel == 4 ? GL_RGBA8 : GL_RGB8);
+    u32 Format = (BytesPerPixel == 4 ? GL_RGBA : GL_RGB);
+    glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, Width, Height, 0, Format, GL_UNSIGNED_BYTE, ImageData);
+    // glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return TextureID;
+}
+
+u32
+LoadTexture(const char *Path)
+{
+    SDL_Surface *surface = IMG_Load(Path);
+    // TODO: Handle errors opening images properly
+    Assert(surface);
+
+    u32 TextureID = 
+        LoadTextureFromData(surface->pixels, (u32) surface->w, (u32) surface->h, (u32) surface->pitch, (u32) surface->format->BytesPerPixel);
+
+    SDL_FreeSurface(surface);
+
+    return TextureID;
 }
 
 void SetWindowTitle(const char *title)
