@@ -26,3 +26,5 @@ cl %srcdir%\savt_game.cpp %copt% %cwopt% /link %llib% %lopt% /pdb:savt_game_%ran
 del savt_game.lock
 
 popd
+
+if %errorlevel% neq 0 (exit /b %errorlevel%)

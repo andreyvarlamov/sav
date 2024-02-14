@@ -19,33 +19,33 @@ int main(int argc, char **argv)
     // RenderDecl *RenderPtr = &Render;
     InitGameCode("bin/savt_game.dll", "UpdateAndRender", (void **) &UpdateAndRender);
 
-    game_memory gameMemory = AllocGameMemory(Megabytes(128));
+    game_memory GameMemory = AllocGameMemory(Megabytes(128));
 
-    b32 quit = false;
-    while (!quit)
+    b32 ShouldQuit = false;
+    while (!ShouldQuit)
     {
-        PollEvents(&quit);
+        PollEvents(&ShouldQuit);
             
         if (KeyPressed(SDL_SCANCODE_ESCAPE))
         {
-            quit = true;
+            ShouldQuit = true;
         }
 
         if (KeyPressed(SDL_SCANCODE_F5))
         {
-            DumpGameMemory(gameMemory);
+            DumpGameMemory(GameMemory);
         }
 
         if (KeyPressed(SDL_SCANCODE_F7))
         {
-            ReloadGameMemoryDump(gameMemory);
+            ReloadGameMemoryDump(GameMemory);
         }
 
-        b32 reloaded = ReloadGameCode((void **) &UpdateAndRender);
+        b32 Reloaded = ReloadGameCode((void **) &UpdateAndRender);
                         
         if (UpdateAndRender)
         {
-            UpdateAndRender(&quit, reloaded, gameMemory);
+            UpdateAndRender(&ShouldQuit, Reloaded, GameMemory);
         }
     }
 

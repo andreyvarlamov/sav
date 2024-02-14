@@ -20,3 +20,5 @@ rem /section:.shared,rw
 cl %srcdir%\sav_lib.cpp %copt% %cwopt% /DSAV_EXPORTS /link %llib% %lopt%
 
 popd
+
+if %errorlevel% neq 0 (exit /b %errorlevel%)

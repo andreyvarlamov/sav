@@ -11,54 +11,55 @@
 
 struct game_state
 {
-    b32 isInitialized;
+    b32 IsInitialized;
 
-    memory_arena rootArena;
-    memory_arena worldArena;
-    memory_arena transientArena;
+    memory_arena RootArena;
+    memory_arena WorldArena;
+    memory_arena TransientArena;
 
-    u32 shaderProgram;
-    u32 vbo;
-    u32 vao;
+    u32 ShaderProgram;
+    u32 VBO;
+    u32 VAO;
 
-    u64 currentFrame;
+    u64 CurrentFrame;
 
-    b32 mouseRel;
+    b32 MouseRel;
 
-    b32 borderless;
+    b32 Borderless;
 
-    f32 triX;
-    f32 triY;
+    f32 TriX;
+    f32 TriY;
 };
 
-GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory) 
+GAME_API void
+UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
 {
-    game_state *gameState = (game_state *) gameMemory.data;
+    game_state *GameState = (game_state *) GameMemory.Data;
     
-    if (!gameState->isInitialized)
+    if (!GameState->IsInitialized)
     {
         Assert(sizeof(game_state) < Megabytes(16));
-        u8 *rootArenaBase = (u8 *) gameMemory.data + Megabytes(16);
-        size_t rootArenaSize = gameMemory.size - Megabytes(16);
-        gameState->rootArena = MemoryArena(rootArenaBase, rootArenaSize);
+        u8 *RootArenaBase = (u8 *) GameMemory.Data + Megabytes(16);
+        size_t RootArenaSize = GameMemory.Size - Megabytes(16);
+        GameState->RootArena = MemoryArena(RootArenaBase, RootArenaSize);
 
-        gameState->worldArena = MemoryArenaNested(&gameState->rootArena, Megabytes(16));
-        gameState->transientArena = MemoryArenaNested(&gameState->rootArena, Megabytes(16));
+        GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+        GameState->TransientArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         
-        gameState->shaderProgram = BuildShader();
-        PrepareGpuData(&gameState->vbo, &gameState->vao);
+        GameState->ShaderProgram = BuildShader();
+        PrepareGpuData(&GameState->VBO, &GameState->VAO);
 
-        gameState->currentFrame = 0;
+        GameState->CurrentFrame = 0;
 
-        gameState->isInitialized = true;
+        GameState->IsInitialized = true;
     }
 
-    if (reloaded)
+    if (Reloaded)
     {
-        gameState->mouseRel = GetMouseRelativeMode();
+        GameState->MouseRel = GetMouseRelativeMode();
     }
 
-    MemoryArena_Reset(&gameState->transientArena);
+    MemoryArena_Reset(&GameState->TransientArena);
 
     if (KeyDown(SDL_SCANCODE_1))
     {
@@ -86,19 +87,19 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
 
     if (KeyPressed(SDL_SCANCODE_SPACE))
     {
-        gameState->mouseRel = !gameState->mouseRel;
-        SetMouseRelativeMode(gameState->mouseRel);
-        TraceLog("Mouse Relative Mode: %d", gameState->mouseRel);
+        GameState->MouseRel = !GameState->MouseRel;
+        SetMouseRelativeMode(GameState->MouseRel);
+        TraceLog("Mouse Relative Mode: %d", GameState->MouseRel);
     }
 
     if (MouseDown(SDL_BUTTON_X1))
     {
-        TraceLog("MouseDown: X1; Abs(%d, %d)", GetMousePos().x, GetMousePos().y);
+        TraceLog("MouseDown: X1; Abs(%d, %d)", GetMousePos().X, GetMousePos().Y);
     }
 
     if (MouseDown(SDL_BUTTON_X2))
     {
-        TraceLog("MouseDown: X2; Rel(%d, %d)", GetMouseRelPos().x, GetMouseRelPos().y);
+        TraceLog("MouseDown: X2; Rel(%d, %d)", GetMouseRelPos().X, GetMouseRelPos().Y);
     }
 
     if (MouseClicks(SDL_BUTTON_LEFT, 1))
@@ -138,63 +139,63 @@ GAME_API void UpdateAndRender(b32 *quit, b32 reloaded, game_memory gameMemory)
 
     if (KeyPressed(SDL_SCANCODE_F1))
     {
-        TraceLog("Window size: Orig(%d, %d), Curr(%d, %d)", GetWindowSize().originalWidth, GetWindowSize().originalHeight, GetWindowSize().width, GetWindowSize().height); 
+        TraceLog("Window size: Orig(%d, %d), Curr(%d, %d)", GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, GetWindowSize().Width, GetWindowSize().Height); 
     }
 
     if (KeyPressed(SDL_SCANCODE_F11))
     {
-        gameState->borderless = !gameState->borderless;
-        SetWindowBorderless(gameState->borderless);
+        GameState->Borderless = !GameState->Borderless;
+        SetWindowBorderless(GameState->Borderless);
     }
 
-    f32 rate = 1.0f;
+    f32 Rate = 1.0f;
     if (KeyDown(SDL_SCANCODE_W))
     {
-        gameState->triY += rate * (f32) GetDeltaPrev();
+        GameState->TriY += Rate * (f32) GetDeltaPrev();
     }
     if (KeyDown(SDL_SCANCODE_S))
     {
-        gameState->triY -= rate * (f32) GetDeltaPrev();
+        GameState->TriY -= Rate * (f32) GetDeltaPrev();
     }
     if (KeyDown(SDL_SCANCODE_A))
     {
-        gameState->triX -= rate * (f32) GetDeltaPrev();
+        GameState->TriX -= Rate * (f32) GetDeltaPrev();
     }
     if (KeyDown(SDL_SCANCODE_D))
     {
-        gameState->triX += rate * (f32) GetDeltaPrev();
+        GameState->TriX += Rate * (f32) GetDeltaPrev();
     }
 
-    if (gameState->triX >= 1.0f)
+    if (GameState->TriX >= 1.0f)
     {
-        gameState->triX = -1.0f;
+        GameState->TriX = -1.0f;
     }
-    else if (gameState->triX <= -1.0f)
+    else if (GameState->TriX <= -1.0f)
     {
-        gameState->triX = 1.0f;
+        GameState->TriX = 1.0f;
     }
-    if (gameState->triY >= 1.0f)
+    if (GameState->TriY >= 1.0f)
     {
-        gameState->triY = -1.0f;
+        GameState->TriY = -1.0f;
     }
-    else if (gameState->triY <= -1.0f)
+    else if (GameState->TriY <= -1.0f)
     {
-        gameState->triY = 1.0f;
+        GameState->TriY = 1.0f;
     }
 
     BeginDraw();
     {
-        float triangle[] = {
-            gameState->triX + 0.0f, gameState->triY + 0.1f, 0.0f,
-            gameState->triX + 0.1f, gameState->triY - 0.1f, 0.0f,
-            gameState->triX - 0.1f, gameState->triY - 0.1f, 0.0,
+        float Triangle[] = {
+            GameState->TriX + 0.0f, GameState->TriY + 0.1f, 0.0f,
+            GameState->TriX + 0.1f, GameState->TriY - 0.1f, 0.0f,
+            GameState->TriX - 0.1f, GameState->TriY - 0.1f, 0.0,
         };
     
-        DrawVertices(gameState->shaderProgram, gameState->vbo, gameState->vao, triangle, ArrayCount(triangle) / 3);
+        DrawVertices(GameState->ShaderProgram, GameState->VBO, GameState->VAO, Triangle, ArrayCount(Triangle) / 3);
     }
     EndDraw();
 
-    char title[256];
-    sprintf_s(title, "SAV Instantaneous: (%.3f FPS | %0.3f ms) Average: (%0.3f FPS | %0.3f ms)", GetFPSPrev(), GetDeltaPrev(), GetFPSAvg(), GetDeltaAvg());
-    SetWindowTitle(title);
+    char Title[256];
+    sprintf_s(Title, "SAV Instantaneous: (%.3f FPS | %0.3f ms) Average: (%0.3f FPS | %0.3f ms)", GetFPSPrev(), GetDeltaPrev(), GetFPSAvg(), GetDeltaAvg());
+    SetWindowTitle(Title);
 }

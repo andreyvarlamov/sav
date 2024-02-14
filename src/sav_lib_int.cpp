@@ -5,60 +5,60 @@
 
 struct sdl_state
 {
-    SDL_Window *window;
+    SDL_Window *Window;
 
-    window_size windowSize;
+    window_size WindowSize;
     
-    i32 widthBeforeBorderless;
-    i32 heightBeforeBorderless;
-    i32 xBeforeBorderless;
-    i32 yBeforeBorderless;
+    i32 WidthBeforeBorderless;
+    i32 HeightBeforeBorderless;
+    i32 XBeforeBorderless;
+    i32 YBeforeBorderless;
 
-    u64 perfCounterFreq;
-    u64 lastCounter;
-    f64 prevDelta;
-    f64 deltaSamples[TIMING_STAT_AVG_COUNT];
-    int currentTimingStatSample;
-    f64 avgDelta;
+    u64 PerfCounterFreq;
+    u64 LastCounter;
+    f64 PrevDelta;
+    f64 DeltaSamples[TIMING_STAT_AVG_COUNT];
+    int CurrentTimingStatSample;
+    f64 AvgDelta;
 };
 
 struct win32_state
 {
-    HANDLE dumpMemoryFileHandle;
-    HANDLE dumpMemoryMap;
-    void *dumpMemoryBlock;
+    HANDLE DumpMemoryFileHandle;
+    HANDLE DumpMemoryMap;
+    void *DumpMemoryBlock;
 };
 
 // TODO: Technically all these could be flags in one u8 array. But I'm not sure if it's slower to do bitwise. Need to profile.
 struct input_state
 {
-    u8 currentKeyStates[SDL_NUM_SCANCODES];
-    u8 previousKeyStates[SDL_NUM_SCANCODES];
-    u8 repeatKeyStates[SDL_NUM_SCANCODES];
+    u8 CurrentKeyStates[SDL_NUM_SCANCODES];
+    u8 PreviousKeyStates[SDL_NUM_SCANCODES];
+    u8 RepeatKeyStates[SDL_NUM_SCANCODES];
 
-    mouse_pos mousePos;
-    mouse_pos mouseRelPos;
+    mouse_pos MousePos;
+    mouse_pos MouseRelPos;
 
-    b32 isRelMouse;
+    b32 IsRelMouse;
 
-    u8 currentMouseButtonStates[SDL_BUTTON_X2 + 1];
-    u8 previousMouseButtonStates[SDL_BUTTON_X2 + 1];
-    u8 clickMouseButtonStates[SDL_BUTTON_X2 + 1];
+    u8 CurrentMouseButtonStates[SDL_BUTTON_X2 + 1];
+    u8 PreviousMouseButtonStates[SDL_BUTTON_X2 + 1];
+    u8 ClickMouseButtonStates[SDL_BUTTON_X2 + 1];
 
-    i32 mouseWheel;
+    i32 MouseWheel;
 };
 
 struct game_code
 {
-    b32 isValid;
-    HMODULE dll;
-    FILETIME lastWriteTime;
+    b32 IsValid;
+    HMODULE Dll;
+    FILETIME LastWriteTime;
 
-    simple_string sourceDllPath;
-    simple_string tempDllPath;
-    simple_string lockFilePath;
+    simple_string SourceDllPath;
+    simple_string TempDllPath;
+    simple_string LockFilePath;
 
-    simple_string funcName;
+    simple_string FuncName;
     void *UpdateAndRenderFunc;
 };
 

@@ -13,42 +13,42 @@
 
 struct game_memory
 {
-    void *data;
-    size_t size;
+    void *Data;
+    size_t Size;
 };
 
 struct music_stream
 {
-    void *music;
+    void *Music;
 };
 
 struct sound_chunk
 {
-    void *sound;
+    void *Sound;
 };
 
 struct mouse_pos
 {
-    int x;
-    int y;
+    int X;
+    int Y;
 };
 
 struct window_size
 {
-    int width;
-    int height;
-    int originalWidth;
-    int originalHeight;
+    int Width;
+    int Height;
+    int OriginalWidth;
+    int OriginalHeight;
 };
 
-SAV_API void DumpGameMemory(game_memory gameMemory);
-SAV_API void ReloadGameMemoryDump(game_memory gameMemory);
+SAV_API void DumpGameMemory(game_memory GameMemory);
+SAV_API void ReloadGameMemoryDump(game_memory GameMemory);
 
-SAV_API game_memory AllocGameMemory(size_t size);
-SAV_API b32 InitWindow(const char *name, int width, int height);
+SAV_API game_memory AllocGameMemory(size_t Size);
+SAV_API b32 InitWindow(const char *Name, int Width, int Height);
 SAV_API window_size GetWindowSize();
-SAV_API void SetWindowBorderless(b32 borderless);
-SAV_API void PollEvents(b32 *quit);
+SAV_API void SetWindowBorderless(b32 Borderless);
+SAV_API void PollEvents(b32 *Quit);
 
 SAV_API u64 GetCurrentFrame();
 SAV_API f64 GetDeltaFixed();
@@ -57,39 +57,39 @@ SAV_API f64 GetDeltaAvg();
 SAV_API f64 GetFPSPrev();
 SAV_API f64 GetFPSAvg();
 
-SAV_API void TraceLog(const char *format, ...);
+SAV_API void TraceLog(const char *Format, ...);
 SAV_API void Quit();
-SAV_API b32 InitGameCode(const char *dllPath, const char *funcName, void **updateAndRenderFunc);
-SAV_API b32 ReloadGameCode(void **updateAndRenderFunc);
+SAV_API b32 InitGameCode(const char *DllPath, const char *FuncName, void **UpdateAndRenderFunc);
+SAV_API b32 ReloadGameCode(void **UpdateAndRenderFunc);
 SAV_API u32 BuildShader();
-SAV_API void PrepareGpuData(u32 *vbo, u32 *vao);
+SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO);
 SAV_API void BeginDraw();
-SAV_API void DrawVertices(u32 shaderProgram, u32 vbo, u32 vao, float *vertices, int vertexCount);
-SAV_API void SetWindowTitle(const char *title);
+SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, float *Vertices, int VertexCount);
+SAV_API void SetWindowTitle(const char *Title);
 SAV_API void EndDraw();
 
-SAV_API b32 KeyDown(int key);
-SAV_API b32 KeyPressed(int key);
-SAV_API b32 KeyReleased(int key);
-SAV_API b32 KeyRepeat(int key);
-SAV_API b32 KeyPressedOrRepeat(int key);
+SAV_API b32 KeyDown(int Key);
+SAV_API b32 KeyPressed(int Key);
+SAV_API b32 KeyReleased(int Key);
+SAV_API b32 KeyRepeat(int Key);
+SAV_API b32 KeyPressedOrRepeat(int Key);
 
 SAV_API b32 GetMouseRelativeMode();
-SAV_API void SetMouseRelativeMode(b32 enabled);
+SAV_API void SetMouseRelativeMode(b32 Enabled);
 SAV_API mouse_pos GetMousePos();
 SAV_API mouse_pos GetMouseRelPos();
-SAV_API b32 MouseDown(int button);
-SAV_API b32 MousePressed(int button);
-SAV_API b32 MouseReleased(int button);
-SAV_API b32 MouseClicks(int button, int clicks);
+SAV_API b32 MouseDown(int Button);
+SAV_API b32 MousePressed(int Button);
+SAV_API b32 MouseReleased(int Button);
+SAV_API b32 MouseClicks(int Button, int Clicks);
 SAV_API i32 MouseWheel();
 
 SAV_API b32 InitAudio();
-SAV_API music_stream LoadMusicStream(const char *filePath);
-SAV_API sound_chunk LoadSoundChunk(const char *filePath);
-SAV_API b32 PlayMusicStream(music_stream stream);
-SAV_API b32 PlaySoundChunk(sound_chunk chunk);
-SAV_API void FreeMusicStream(music_stream stream);
-SAV_API void FreeSoundChunk(sound_chunk chunk);
+SAV_API music_stream LoadMusicStream(const char *FilePath);
+SAV_API sound_chunk LoadSoundChunk(const char *FilePath);
+SAV_API b32 PlayMusicStream(music_stream Stream);
+SAV_API b32 PlaySoundChunk(sound_chunk Chunk);
+SAV_API void FreeMusicStream(music_stream Stream);
+SAV_API void FreeSoundChunk(sound_chunk Chunk);
 
 #endif
