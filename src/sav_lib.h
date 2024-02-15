@@ -18,15 +18,6 @@ struct game_memory
     size_t Size;
 };
 
-struct music_stream
-{
-    void *Music;
-};
-
-struct sound_chunk
-{
-    void *Sound;
-};
 
 struct mouse_pos
 {
@@ -40,6 +31,34 @@ struct window_size
     int Height;
     int OriginalWidth;
     int OriginalHeight;
+};
+
+struct music_stream
+{
+    void *Music;
+};
+
+struct sound_chunk
+{
+    void *Sound;
+};
+
+struct sav_image
+{
+    void *Data;
+
+    int Width;
+    int Height;
+    int Pitch;
+
+    void *_dataToFree;
+};
+
+struct sav_texture
+{
+    u32 Glid;
+    int Width;
+    int Height;
 };
 
 SAV_API game_memory AllocGameMemory(size_t Size);
@@ -87,17 +106,19 @@ SAV_API b32 PlaySoundChunk(sound_chunk Chunk);
 SAV_API void FreeMusicStream(music_stream Stream);
 SAV_API void FreeSoundChunk(sound_chunk Chunk);
 
+SAV_API void BeginDraw();
+SAV_API void EndDraw();
 SAV_API u32 BuildBasicShader(); // TODO: Load shaders from files; // TODO: Shader hot reload
 SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO);
-SAV_API void BeginDraw();
 SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
-                          vec3 *Positions, vec2 *TexCoords, vec3 *Colors, u32 *Indices,
+                          vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
                           int VertexCount, int IndexCount);
-SAV_API void LoadImage(); // TODO
-SAV_API void FreeImage(); // TODO
-SAV_API u32 LoadTextureFromData(void *ImageData, u32 Width, u32 Height, u32 Pitch, u32 BytesPerPixel);
-SAV_API u32 LoadTexture(const char *Path);
-SAV_API void EndDraw();
+
+SAV_API sav_image SavLoadImage(const char *Path);
+SAV_API void SavFreeImage(sav_image *Image);
+SAV_API sav_texture SavLoadTexture(const char *Path);
+SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
+SAV_API sav_texture SavLoadTextureFromData(void *ImageData, u32 Width, u32 Height);
 
 SAV_API void TraceLog(const char *Format, ...);
 

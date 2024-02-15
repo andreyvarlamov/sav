@@ -653,6 +653,21 @@ void FreeSoundChunk(sound_chunk Chunk)
 // NOTE: Drawing
 //
 
+void
+BeginDraw()
+{
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void
+EndDraw()
+{
+    sdl_state *SdlState = &gSdlState;
+    
+    SDL_GL_SwapWindow(SdlState->Window);
+}
+
 u32
 BuildBasicShader()
 {
@@ -696,7 +711,7 @@ BuildBasicShader()
         "{\n"
         "   vec4 texelColor = texture(texture0, fragTexCoord);\n"
         // "   finalColor = texelColor * colorDiffuse * fragColor;\n"
-        "   finalColor = texelColor;\n"
+        "   finalColor = fragColor * texelColor;\n"
         // "   finalColor = vec4(1.0);\n"
         "}\n\0";
      
@@ -728,8 +743,11 @@ BuildBasicShader()
     return shaderProgram;
 }
 
-#define GPU_VERT_COUNT 8192
-#define GPU_INDEX_COUNT 32768
+// #define GPU_VERT_COUNT 8192
+// #define GPU_INDEX_COUNT 32768
+
+enum { GPU_VERT_COUNT = 8192 };
+enum { GPU_INDEX_COUNT = 32768 };
 
 void
 PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
@@ -739,18 +757,21 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
     
     glGenVertexArrays(1, VAO);
     Assert(*VAO);
-    glBindVertexArray(*VAO);
                     
     glGenBuffers(1, VBO);
     Assert(*VBO);
     glBindBuffer(GL_ARRAY_BUFFER, *VBO);
     glBufferData(GL_ARRAY_BUFFER, MaxVertCount * BytesPerVertex, 0, GL_DYNAMIC_DRAW);
+
+    glBindVertexArray(*VAO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *) (MaxVertCount * 3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (MaxVertCount * 5 * sizeof(float)));
     glEnableVertexAttribArray(2);
+    // float c[] = { 0.0f, 1.0f ,0.0f, 1.0f };
+    // glVertexAttrib4fv(2, c);
 
     glGenBuffers(1, EBO);
     Assert(*EBO);
@@ -764,15 +785,8 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
 }
 
 void
-BeginDraw()
-{
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void
 DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
-             vec3 *Positions, vec2 *TexCoords, vec3 *Colors, u32 *Indices,
+             vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
              int VertexCount, int IndexCount)
 {
     Assert(Positions);
@@ -783,15 +797,15 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
     {
-        glBufferSubData(GL_ARRAY_BUFFER, 0,                                VertexCount * 3 * sizeof(float), Positions);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, VertexCount*sizeof(vec3), Positions);
     }
     if (TexCoords)
     {
-        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount * 3 * sizeof(float), VertexCount * 2 * sizeof(float), TexCoords);
+        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
     }
     if (Colors)
     {
-        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount * 5 * sizeof(float), VertexCount * 4 * sizeof(float), Colors);
+        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -808,52 +822,87 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
     glUseProgram(0);
 }
 
-u32
-LoadTextureFromData(void *ImageData, u32 Width, u32 Height, u32 Pitch, u32 BytesPerPixel)
+sav_image
+SavLoadImage(const char *Path)
 {
-    // TODO: Handle different image data formats better
-    Assert(Width * BytesPerPixel == Pitch);
-    Assert(BytesPerPixel == 4 || BytesPerPixel == 3);
+    SDL_Surface *OriginalSurface = IMG_Load(Path);
+    if (!OriginalSurface)
+    {
+        const char *Error = SDL_GetError();
+        TraceLog("Could not load image at %s:\n%s", Path, Error);
+        InvalidCodePath;
+    }
+    else
+    {
+        TraceLog("Loaded image at %s", Path);
+    }
     
-    u32 TextureID;
+    // SDL_Surface *RGBASurface = SDL_ConvertSurfaceFormat(OriginalSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+    SDL_Surface *RGBASurface = OriginalSurface;
+    // SDL_FreeSurface(OriginalSurface);
 
+    if (RGBASurface->pitch != RGBASurface->format->BytesPerPixel * RGBASurface->w)
+    {
+        TraceLog("SDL Loaded image, but format could not be converted.");
+        InvalidCodePath;
+    }
+
+    sav_image Image = {};
+    Image.Data = RGBASurface->pixels;
+    Image.Width = RGBASurface->w;
+    Image.Height = RGBASurface->h;
+    Image.Pitch = RGBASurface->pitch;
+    Image._dataToFree = RGBASurface;
+    return Image;
+}
+
+void
+SavFreeImage(sav_image *Image)
+{
+    SDL_FreeSurface((SDL_Surface *) Image->_dataToFree);
+    Image->Data = 0;
+    Image->_dataToFree = 0;
+
+}
+
+sav_texture
+SavLoadTexture(const char *Path)
+{
+    sav_image Image = SavLoadImage(Path);
+    sav_texture Texture = SavLoadTextureFromImage(Image);
+    SavFreeImage(&Image);
+    return Texture;
+}
+
+sav_texture
+SavLoadTextureFromImage(sav_image Image)
+{
+    return SavLoadTextureFromData(Image.Data, Image.Width, Image.Height);
+}
+
+sav_texture
+SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
+{
+    u32 TextureID;
     glGenTextures(1, &TextureID);
     Assert(TextureID);
     glBindTexture(GL_TEXTURE_2D, TextureID);
-    u32 InternalFormat = (BytesPerPixel == 4 ? GL_RGBA8 : GL_RGB8);
-    u32 Format = (BytesPerPixel == 4 ? GL_RGBA : GL_RGB);
-    glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, Width, Height, 0, Format, GL_UNSIGNED_BYTE, ImageData);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, Data);
+
+    // TODO: Set these dynamically
     // glGenerateMipmap(GL_TEXTURE_2D);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // ---------
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    return TextureID;
-}
-
-u32
-LoadTexture(const char *Path)
-{
-    SDL_Surface *surface = IMG_Load(Path);
-    // TODO: Handle errors opening images properly
-    Assert(surface);
-
-    u32 TextureID = 
-        LoadTextureFromData(surface->pixels, (u32) surface->w, (u32) surface->h, (u32) surface->pitch, (u32) surface->format->BytesPerPixel);
-
-    SDL_FreeSurface(surface);
-
-    return TextureID;
-}
-
-void
-EndDraw()
-{
-    sdl_state *SdlState = &gSdlState;
-    
-    SDL_GL_SwapWindow(SdlState->Window);
+    sav_texture Texture = {};
+    Texture.Glid = TextureID;
+    Texture.Width = Width;
+    Texture.Height = Height;
+    return Texture;
 }
 
 //
