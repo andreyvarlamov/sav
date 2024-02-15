@@ -62,25 +62,22 @@ struct game_code
     void *UpdateAndRenderFunc;
 };
 
-#if 0
 struct gl_state
 {
-    f32 *vertices;
-    i32 vertexCount;
-    i32 maxVertexCount;
-    u32 shaderProgram;
-    u32 vbo;
-    u32 vao;
+    u32 ShaderProgram;
+    u32 VBO;
+    u32 VAO;
+    u32 EBO;
+
+    u32 DefaultTextureGlid;
 };
-#endif
 
 static_g sdl_state gSdlState;
 static_g win32_state gWin32State;
-static_g game_code gGameCode;
-static_g input_state gInputState = {};
-#if 0
 static_g gl_state gGlState;
-#endif
+static_g input_state gInputState;
+
+static_g game_code gGameCode;
 
 static_g u64 gCurrentFrame;
 

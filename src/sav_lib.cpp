@@ -266,6 +266,14 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                                             SdlState->WindowSize.Width, SdlState->WindowSize.Height,
                                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
+        i32 SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
+        i32 IMGInitResult = IMG_Init(SDLImageFlags);
+        if (!(IMGInitResult & SDLImageFlags))
+        {
+            printf("SDL failed to init SDL_image\n");
+            return false;
+        }
+
         if (SdlState->Window)
         {
             SDL_GLContext GlContext = SDL_GL_CreateContext(SdlState->Window);
@@ -284,14 +292,19 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
 
-                i32 SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
-                i32 IMGInitResult = IMG_Init(SDLImageFlags);
-                if (!(IMGInitResult & SDLImageFlags))
-                {
-                    printf("SDL failed to init SDL_image\n");
-                    return false;
-                }
+                // TODO: Don't do the following things in this function
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+                glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+
+                u32 White = 0xFFFFFFFF;
+                sav_texture DefaultTexture = SavLoadTextureFromData(&White, 1, 1);
+                gl_state *GlState = &gGlState;
+                GlState->DefaultTextureGlid = DefaultTexture.Glid;
+
+                GlState->ShaderProgram = BuildBasicShader();
+                PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO);
             }
             else
             {
@@ -656,7 +669,6 @@ void FreeSoundChunk(sound_chunk Chunk)
 void
 BeginDraw()
 {
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
@@ -743,11 +755,8 @@ BuildBasicShader()
     return shaderProgram;
 }
 
-// #define GPU_VERT_COUNT 8192
-// #define GPU_INDEX_COUNT 32768
-
-enum { GPU_VERT_COUNT = 8192 };
-enum { GPU_INDEX_COUNT = 32768 };
+enum { GPU_VERT_COUNT = 256 };
+enum { GPU_INDEX_COUNT = 1024 };
 
 void
 PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
@@ -790,23 +799,17 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
              int VertexCount, int IndexCount)
 {
     Assert(Positions);
+    Assert(TexCoords);
+    Assert(Colors);
     Assert(VertexCount > 0);
     
     u32 MaxVertCount = GPU_VERT_COUNT;
     
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
-    {
-        glBufferSubData(GL_ARRAY_BUFFER, 0, VertexCount*sizeof(vec3), Positions);
-    }
-    if (TexCoords)
-    {
-        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
-    }
-    if (Colors)
-    {
-        glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
-    }
+    glBufferSubData(GL_ARRAY_BUFFER, 0, VertexCount*sizeof(vec3), Positions);
+    glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
+    glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -821,6 +824,63 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
 
     glUseProgram(0);
 }
+
+void
+DrawTexture(sav_texture Texture, vec4 Color)
+{
+    vec3 Positions[] = {
+        Vec3(-0.3f, -0.3f, 0.0f),
+        Vec3(0.3f, -0.3f, 0.0f),
+        Vec3(0.3f, 0.3f, 0.0f),
+        Vec3(-0.3f, 0.3f, 0.0f)
+    };
+    vec2 TexCoords[] = {
+        Vec2(0, 0),
+        Vec2(1, 0),
+        Vec2(1, 1),
+        Vec2(0, 1)
+    };
+    vec4 Colors[] = { Color, Color, Color, Color };
+    u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, Texture.Glid);
+
+    gl_state *GlState = &gGlState;
+    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
+                 Positions, TexCoords, Colors, Indices,
+                 ArrayCount(Positions), ArrayCount(Indices));
+
+    glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
+}
+
+void
+DrawRect(vec4 Color)
+{
+    vec3 Positions[] = {
+        Vec3(-0.3f, -0.3f, 0.0f),
+        Vec3(0.3f, -0.3f, 0.0f),
+        Vec3(0.3f, 0.3f, 0.0f),
+        Vec3(-0.3f, 0.3f, 0.0f)
+    };
+    for (int i = 0; i < ArrayCount(Positions); i++)
+    {
+        Positions[i] += Vec3(0.6f, 0.0f, 0.0f);
+    }
+    vec2 TexCoords[] = { Vec2(0), Vec2(0), Vec2(0), Vec2(0) };
+    vec4 Colors[] = { Color, Color, Color, Color };
+
+    u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+
+    gl_state *GlState = &gGlState;
+    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
+                 Positions, TexCoords, Colors, Indices,
+                 ArrayCount(Positions), ArrayCount(Indices));
+}
+
+//
+// NOTE: Image/texture loading
+//
 
 sav_image
 SavLoadImage(const char *Path)
@@ -837,14 +897,29 @@ SavLoadImage(const char *Path)
         TraceLog("Loaded image at %s", Path);
     }
     
-    // SDL_Surface *RGBASurface = SDL_ConvertSurfaceFormat(OriginalSurface, SDL_PIXELFORMAT_RGBA8888, 0);
-    SDL_Surface *RGBASurface = OriginalSurface;
-    // SDL_FreeSurface(OriginalSurface);
+    SDL_Surface *RGBASurface = SDL_ConvertSurfaceFormat(OriginalSurface, SDL_PIXELFORMAT_RGBA8888, 0);
+    SDL_FreeSurface(OriginalSurface);
 
     if (RGBASurface->pitch != RGBASurface->format->BytesPerPixel * RGBASurface->w)
     {
         TraceLog("SDL Loaded image, but format could not be converted.");
         InvalidCodePath;
+    }
+
+    // NOTE: Flip rows of pixels, because opengl expects textures to have bottom rows first
+    {
+        SDL_Surface *Surface = RGBASurface;
+        char *Pixels = (char *) Surface->pixels;
+        for (int y = 0; y < Surface->h / 2; y++)
+        {
+            for (int x = 0; x < Surface->pitch; x++)
+            {
+                int oppY = Surface->h - y  - 1;
+                char Temp = Pixels[oppY * Surface->pitch + x];
+                Pixels[oppY * Surface->pitch + x] = Pixels[y * Surface->pitch + x];
+                Pixels[y * Surface->pitch + x] = Temp;
+            }
+        }
     }
 
     sav_image Image = {};
@@ -887,7 +962,7 @@ SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
     glGenTextures(1, &TextureID);
     Assert(TextureID);
     glBindTexture(GL_TEXTURE_2D, TextureID);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, Data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, Data);
 
     // TODO: Set these dynamically
     // glGenerateMipmap(GL_TEXTURE_2D);
