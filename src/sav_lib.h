@@ -3,6 +3,7 @@
 
 #include <varand/varand_types.h>
 #include "va_linmath.h"
+#include "va_rect.h"
 
 #ifdef SAV_EXPORTS
 #define SAV_API extern "C" __declspec(dllexport)
@@ -113,8 +114,8 @@ SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO);
 SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
                           vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
                           int VertexCount, int IndexCount);
-SAV_API void DrawTexture(sav_texture Texture, vec4 Color);
-SAV_API void DrawRect(vec4 Color);
+SAV_API void DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, vec4 Color);
+SAV_API void DrawRect(rect Rect, vec4 Color);
 
 SAV_API sav_image SavLoadImage(const char *Path);
 SAV_API void SavFreeImage(sav_image *Image);

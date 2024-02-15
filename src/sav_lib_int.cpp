@@ -70,6 +70,8 @@ struct gl_state
     u32 EBO;
 
     u32 DefaultTextureGlid;
+
+    mat4 Projection;
 };
 
 static_g sdl_state gSdlState;

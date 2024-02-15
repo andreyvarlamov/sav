@@ -2,7 +2,7 @@
 
 #include <varand/varand_util.h>
 #include <varand/varand_sstring.h>
-#include <varand/varand_linmath.h>
+#include "va_linmath.h"
 
 #include <windows.h>
 
@@ -295,7 +295,7 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 // TODO: Don't do the following things in this function
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+ 
                 glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 
                 u32 White = 0xFFFFFFFF;
@@ -305,6 +305,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 
                 GlState->ShaderProgram = BuildBasicShader();
                 PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO);
+
+                GlState->Projection = Mat4GetOrthographicProjection(0.0f, (f32) ScreenWidth, (f32) ScreenHeight, 0.0f, -1.0f, 1.0f);
             }
             else
             {
@@ -414,6 +416,7 @@ PollEvents(b32 *Quit)
                     SdlState->WindowSize.Width = Event.window.data1;
                     SdlState->WindowSize.Height = Event.window.data2;
                     glViewport(0, 0, SdlState->WindowSize.Width, SdlState->WindowSize.Height);
+                    gGlState.Projection = Mat4GetOrthographicProjection(0.0f, (f32) SdlState->WindowSize.Width, (f32) SdlState->WindowSize.Height, 0.0f, -1.0f, 1.0f);
                     // TODO: Update projection matrices
                     // TraceLog("Window resized: %d x %d\n", SdlState->WindowSize.Width, SdlState->WindowSize.Height);
                 }
@@ -666,20 +669,6 @@ void FreeSoundChunk(sound_chunk Chunk)
 // NOTE: Drawing
 //
 
-void
-BeginDraw()
-{
-    glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void
-EndDraw()
-{
-    sdl_state *SdlState = &gSdlState;
-    
-    SDL_GL_SwapWindow(SdlState->Window);
-}
-
 u32
 BuildBasicShader()
 {
@@ -695,8 +684,7 @@ BuildBasicShader()
         "{\n"
         "   fragTexCoord = vertTexCoord;\n"
         "   fragColor = vertColor;\n"
-        // "   gl_Position = mvp * vec4(vertPosition, 1.0);\n"
-        "   gl_Position = vec4(vertPosition, 1.0);\n"
+        "   gl_Position = mvp * vec4(vertPosition, 1.0);\n"
         "}\0";
     
     u32 vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -753,6 +741,36 @@ BuildBasicShader()
     glDeleteShader(fragmentShader);
 
     return shaderProgram;
+}
+
+void
+UseProgram(u32 ShaderID)
+{
+    glUseProgram(ShaderID);
+}
+
+void
+SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
+{
+    i32 UniformLocation = glGetUniformLocation(ShaderID, UniformName);
+    Assert(UniformLocation != -1);
+    glUniformMatrix4fv(UniformLocation, 1, false, Value);
+}
+
+void
+BeginDraw()
+{
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    gl_state *GlState = &gGlState;
+    UseProgram(GlState->ShaderProgram);
+    SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+}
+
+void
+EndDraw()
+{
+    SDL_GL_SwapWindow(gSdlState.Window);
 }
 
 enum { GPU_VERT_COUNT = 256 };
@@ -826,20 +844,63 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
 }
 
 void
-DrawTexture(sav_texture Texture, vec4 Color)
+FlipTexCoords(vec2 *TexCoords)
 {
-    vec3 Positions[] = {
-        Vec3(-0.3f, -0.3f, 0.0f),
-        Vec3(0.3f, -0.3f, 0.0f),
-        Vec3(0.3f, 0.3f, 0.0f),
-        Vec3(-0.3f, 0.3f, 0.0f)
-    };
-    vec2 TexCoords[] = {
-        Vec2(0, 0),
-        Vec2(1, 0),
-        Vec2(1, 1),
-        Vec2(0, 1)
-    };
+    vec2 Temp = TexCoords[0];
+    TexCoords[0] = TexCoords[1];
+    TexCoords[1] = Temp;
+    Temp = TexCoords[2];
+    TexCoords[2] = TexCoords[3];
+    TexCoords[3] = Temp;
+}
+
+void
+NormalizeTexCoords(sav_texture Texture, vec2 *TexCoords)
+{
+    f32 ooWidth = 1.0f / Texture.Width;
+    f32 ooHeight = 1.0f / Texture.Height;
+    
+    for (int i = 0; i < 4; i++)
+    {
+        TexCoords[i].X *= ooWidth;
+        TexCoords[i].Y *= ooHeight;
+    }
+}
+
+void
+RotatePointsAroundOrigin(vec3 *Positions, vec3 Origin, f32 Rotation)
+{
+    f32 C = CosF(ToRadiansF(Rotation));
+    f32 S = SinF(ToRadiansF(Rotation));
+
+    for (int i = 0; i < 4; i++)
+    {
+        Positions[i] -= Origin;
+        f32 X = Positions[i].X;
+        f32 Y = Positions[i].Y;
+        Positions[i] = Vec3(C*X - S*Y, S*X + C*Y, 0.0f);
+        Positions[i] += Origin;
+    }
+}
+
+void
+DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, vec4 Color)
+{
+    vec3 AbsOrigin = Vec3(Dest.X, Dest.Y, 0.0f);
+    
+    Dest.X -= Origin.X;
+    Dest.Y -= Origin.Y;
+    
+    vec3 Positions[4];
+    RectGetPoints(Dest, Positions);
+    if (Rotation != 0.0f)
+    {
+        RotatePointsAroundOrigin(Positions, AbsOrigin, Rotation);
+    }
+    vec2 TexCoords[4];
+    RectGetPoints(Source, TexCoords);
+    NormalizeTexCoords(Texture, TexCoords);
+    FlipTexCoords(TexCoords);
     vec4 Colors[] = { Color, Color, Color, Color };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
@@ -855,21 +916,12 @@ DrawTexture(sav_texture Texture, vec4 Color)
 }
 
 void
-DrawRect(vec4 Color)
+DrawRect(rect Rect, vec4 Color)
 {
-    vec3 Positions[] = {
-        Vec3(-0.3f, -0.3f, 0.0f),
-        Vec3(0.3f, -0.3f, 0.0f),
-        Vec3(0.3f, 0.3f, 0.0f),
-        Vec3(-0.3f, 0.3f, 0.0f)
-    };
-    for (int i = 0; i < ArrayCount(Positions); i++)
-    {
-        Positions[i] += Vec3(0.6f, 0.0f, 0.0f);
-    }
-    vec2 TexCoords[] = { Vec2(0), Vec2(0), Vec2(0), Vec2(0) };
+    vec3 Positions[4];
+    RectGetPoints(Rect, Positions);
+    vec2 TexCoords[4] = {};
     vec4 Colors[] = { Color, Color, Color, Color };
-
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
     gl_state *GlState = &gGlState;

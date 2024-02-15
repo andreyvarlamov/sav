@@ -4,6 +4,7 @@
 #include <varand/varand_types.h>
 #include <varand/varand_math.h>
 #include "va_colors.h"
+#include "va_rect.h"
 
 // NOTE: All mat functions assume Column-Major representation [Column][Row]
 
@@ -359,6 +360,38 @@ Vec3Lerp(vec3 A, vec3 B, f32 LerpFactor)
 {
     vec3 Result = A + LerpFactor * (B - A);
     return Result;
+}
+
+// NOTE: Rect-V2/V3 helpers
+
+inline vec2
+RectGetMin(rect Rect)
+{
+    return Vec2(Rect.X, Rect.Y);
+}
+
+inline vec2
+RectGetMax(rect Rect)
+{
+    return Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height);
+}
+
+inline void
+RectGetPoints(rect Rect, vec2 *Points)
+{
+    Points[0] = Vec2(Rect.X, Rect.Y);
+    Points[1] = Vec2(Rect.X, Rect.Y + Rect.Height);
+    Points[2] = Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height);
+    Points[3] = Vec2(Rect.X + Rect.Width, Rect.Y);
+}
+
+inline void
+RectGetPoints(rect Rect, vec3 *Points)
+{
+    Points[0] = Vec3(Rect.X, Rect.Y, 0.0f);
+    Points[1] = Vec3(Rect.X, Rect.Y + Rect.Height, 0.0f);
+    Points[2] = Vec3(Rect.X + Rect.Width, Rect.Y + Rect.Height, 0.0f);
+    Points[3] = Vec3(Rect.X + Rect.Width, Rect.Y, 0.0f);
 }
 
 // -------------------------------------------------------------------------------
@@ -1193,6 +1226,24 @@ Mat4GetPerspecitveProjection(f32 FovY_Degrees, f32 AspectRatio, f32 Near, f32 Fa
     Result.E[2][2] = -(Far + Near) / (Far - Near);
     Result.E[2][3] = -1.0f;
     Result.E[3][2] = -2.0f * Far * Near / (Far - Near);
+
+    return Result;
+}
+
+inline mat4
+Mat4GetOrthographicProjection(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near, f32 Far)
+{
+    // NOTE: http://www.songho.ca/opengl/gl_projectionmatrix.html
+    mat4 Result = {};
+
+    Result.E[0][0] = 2.0f / (Right - Left);
+    Result.E[1][1] = 2.0f / (Top - Bottom);
+    Result.E[2][2] = -2.0f / (Far - Near);
+    
+    Result.E[3][0] = (Right + Left) / (Left - Right);
+    Result.E[3][1] = (Top + Bottom) / (Bottom - Top);
+    Result.E[3][2] = (Far + Near) / (Near - Far);
+    Result.E[3][3] = 1.0f;
 
     return Result;
 }
