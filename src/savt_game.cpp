@@ -28,8 +28,10 @@ struct game_state
 
     b32 Borderless;
 
-    f32 TriX;
-    f32 TriY;
+    camera_2d Camera;
+    
+    f32 MapGlyphWidth;
+    f32 MapGlyphHeight;
 };
 
 GAME_API void
@@ -49,8 +51,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         
         GameState->Texture = SavLoadTexture("res/test.png");
 
-        color TestColor = Color(128, 0, 255, 255);
-        color TestColor2 = Color(0xAA00FFFF);
+        GameState->Camera.Target = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
+        // TODO: Camera offset needs to be updated in poll events (game has no access to it) for it to follow the resolution of the window
+        GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
+        GameState->Camera.Rotation = 0.0f;
+        GameState->Camera.Zoom = 1.0f;
+
         
         GameState->IsInitialized = true;
     }
@@ -63,9 +69,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         SetWindowBorderless(GameState->Borderless);
     }
 
-    static f32 Rot = 0.0f;
-    static f32 Scale = 1.0f;
-    static b32 ScaleIncreasing = true;
+    static_p f32 Rot = 0.0f;
+    static_p f32 Scale = 1.0f;
+    static_p b32 ScaleIncreasing = true;
 
     Rot += 30.0f * (f32) GetDeltaPrev();
     if (Rot >= 360.0f) Rot -= 360.0f;
@@ -89,16 +95,50 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
     }
 
+    vec2 dP = Vec2();
+    if (KeyDown(SDL_SCANCODE_W))
+    {
+        dP.Y -= 1.0f;
+    }
+    if (KeyDown(SDL_SCANCODE_S))
+    {
+        dP.Y += 1.0f;
+    }
+    if (KeyDown(SDL_SCANCODE_A))
+    {
+        dP.X -= 1.0f;
+    }
+    if (KeyDown(SDL_SCANCODE_D))
+    {
+        dP.X += 1.0f;
+    }
+    if (dP.X != 0.0f || dP.Y != 0.0f)
+    {
+        dP = VecNormalize(dP);
+    }
+    
+    f32 MovementSpeed = 1000.0f;
+    GameState->Camera.Target += dP * MovementSpeed * (f32) GetDeltaPrev();
+
+    if (MouseWheel() != 0)
+    {
+        GameState->Camera.Zoom += 0.1f * (f32) MouseWheel();
+    }
+
     BeginDraw();
     {
-        DrawRect(Rect(300, 300, 1600, 500), ColorV4(VA_AQUAMARINE));
+        BeginCameraMode(&GameState->Camera);
+        {
+            DrawRect(Rect(0, 0, 1600, 500), ColorV4(VA_AQUAMARINE));
 
-        DrawTexture(GameState->Texture,
-                    Rect(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
-                    Rect(GameState->Texture.Width, GameState->Texture.Height),
-                    Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
-                    Rot,
-                    ColorV4(VA_MAROON));
+            DrawTexture(GameState->Texture,
+                        Rect(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
+                        Rect(GameState->Texture.Width, GameState->Texture.Height),
+                        Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
+                        Rot,
+                        ColorV4(VA_MAROON));
+        }
+        EndCameraMode();
     } 
     EndDraw();
     

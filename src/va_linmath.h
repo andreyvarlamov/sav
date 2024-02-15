@@ -191,14 +191,14 @@ union vec3
     f32 E[3];
 };
 
-static_i inline vec3
+inline vec3
 Vec3()
 {
     vec3 Result = {};
     return Result;
 }
 
-static_i inline vec3
+inline vec3
 Vec3(f32 X, f32 Y, f32 Z)
 {
     vec3 Result = {};
@@ -210,116 +210,123 @@ Vec3(f32 X, f32 Y, f32 Z)
     return Result;
 }
 
-static_i inline vec3
+inline vec3
 Vec3(f32 Value)
 {
     vec3 Result = Vec3(Value, Value, Value);
     return Result;
 }
 
-static_i inline vec3
+inline vec3
 Vec3(vec2 V, f32 Z)
 {
     vec3 Result = Vec3(V.X, V.Y, Z);
     return Result;
 }
 
-static_i inline vec3
+inline vec3
+Vec3(vec2 V)
+{
+    vec3 Result = Vec3(V, 0);
+    return Result;
+}
+
+inline vec3
 operator+(vec3 V0, vec3 V1)
 {
     return vec3 { V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z };
 }
 
-static_i inline vec3
+inline vec3
 operator-(vec3 V0, vec3 V1)
 {
     return vec3 { V0.X - V1.X, V0.Y - V1.Y, V0.Z - V1.Z };
 }
 
-static_i inline vec3
+inline vec3
 operator-(vec3 V0)
 {
     return vec3 { -V0.X, -V0.Y, -V0.Z };
 }
 
-static_i inline vec3
+inline vec3
 operator*(vec3 V, f32 S)
 {
     return vec3 { V.X * S, V.Y * S, V.Z * S };
 }
 
-static_i inline vec3
+inline vec3
 operator*(f32 S, vec3 V)
 {
     return vec3 { V.X * S, V.Y * S, V.Z * S };
 }
 
-static_i inline vec3
+inline vec3
 operator/(vec3 V, f32 S)
 {
     return vec3 { V.X / S, V.Y / S, V.Z / S };
 }
 
-static_i inline vec3
+inline vec3
 operator/(f32 S, vec3 V)
 {
     return vec3 { S / V.X, S / V.Y, S / V.Z };
 }
 
-static_i inline vec3 &
+inline vec3 &
 operator+=(vec3 &V0, vec3 V1)
 {
     V0 = V0 + V1;
     return V0;
 }
 
-static_i inline vec3 &
+inline vec3 &
 operator-=(vec3 &V0, vec3 V1)
 {
     V0 = V0 - V1;
     return V0;
 }
 
-static_i inline vec3 &
+inline vec3 &
 operator*=(vec3 &V, f32 S)
 {
     V = V * S;
     return V;
 }
 
-static_i inline vec3 &
+inline vec3 &
 operator/=(vec3 &V, f32 S)
 {
     V = V / S;
     return V;
 }
 
-static_i inline f32
+inline f32
 VecDot(vec3 V0, vec3 V1)
 {
     return (V0.X * V1.X + V0.Y * V1.Y + V0.Z * V1.Z);
 }
 
-static_i inline f32
+inline f32
 VecLengthSq(vec3 V)
 {
     return VecDot(V, V);
 }
 
-static_i inline f32
+inline f32
 VecLength(vec3 V)
 {
     return SqrtF(VecLengthSq(V));
 }
 
-static_i inline vec3
+inline vec3
 VecNormalize(vec3 V)
 {
     f32 Length = VecLength(V);
     return ((Length != 0.0f) ? (V / Length) : V);
 }
 
-static_i inline vec3
+inline vec3
 VecCross(vec3 V0, vec3 V1)
 {
     return vec3 { V0.Y * V1.Z - V0.Z * V1.Y,
@@ -327,7 +334,7 @@ VecCross(vec3 V0, vec3 V1)
         V0.X * V1.Y - V0.Y * V1.X };
 }
 
-static_i inline f32
+inline f32
 VecScalarTriple(vec3 A, vec3 B, vec3 C)
 {
     return VecDot(A, VecCross(B, C));
@@ -340,7 +347,7 @@ VecHadamard(vec3 V0, vec3 V1)
     return Result;
 }
 
-static_i inline b32
+inline b32
 IsZeroVector(vec3 Vector)
 {
     return ((AbsF(Vector.X) <= FLT_EPSILON) &&
@@ -348,14 +355,14 @@ IsZeroVector(vec3 Vector)
             (AbsF(Vector.Z) <= FLT_EPSILON));
 }
 
-static_i inline b32
+inline b32
 AreVecEqual(vec3 A, vec3 B)
 {
     b32 Result = IsZeroVector(A - B);
     return Result;
 }
 
-static_i inline vec3
+inline vec3
 Vec3Lerp(vec3 A, vec3 B, f32 LerpFactor)
 {
     vec3 Result = A + LerpFactor * (B - A);

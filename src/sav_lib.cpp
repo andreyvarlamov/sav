@@ -930,6 +930,25 @@ DrawRect(rect Rect, vec4 Color)
                  ArrayCount(Positions), ArrayCount(Indices));
 }
 
+void
+BeginCameraMode(camera_2d *Camera)
+{
+    gl_state *GlState = &gGlState;
+    mat4 Translation = Mat4GetTranslation(-Vec3(Camera->Target));
+    mat4 Rotation = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(Camera->Rotation)));
+    mat4 Scale = Mat4GetScale(Vec3(Camera->Zoom, Camera->Zoom, 0));
+    mat4 Offset = Mat4GetTranslation(Vec3(Camera->Offset));
+    mat4 MVP = GlState->Projection * (Translation * Rotation * Scale * Offset);
+    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
+}
+
+void
+EndCameraMode()
+{
+    gl_state *GlState = &gGlState;
+    SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+}
+
 //
 // NOTE: Image/texture loading
 //

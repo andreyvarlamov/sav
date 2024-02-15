@@ -62,6 +62,14 @@ struct sav_texture
     int Height;
 };
 
+struct camera_2d
+{
+    vec2 Target;
+    vec2 Offset;
+    f32 Rotation;
+    f32 Zoom;
+};
+
 SAV_API game_memory AllocGameMemory(size_t Size);
 SAV_API void DumpGameMemory(game_memory GameMemory);
 SAV_API void ReloadGameMemoryDump(game_memory GameMemory);
@@ -107,15 +115,19 @@ SAV_API b32 PlaySoundChunk(sound_chunk Chunk);
 SAV_API void FreeMusicStream(music_stream Stream);
 SAV_API void FreeSoundChunk(sound_chunk Chunk);
 
+SAV_API u32 BuildBasicShader(); // TODO: Load shaders from files; // TODO: Shader hot reload
+
 SAV_API void BeginDraw();
 SAV_API void EndDraw();
-SAV_API u32 BuildBasicShader(); // TODO: Load shaders from files; // TODO: Shader hot reload
 SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO);
 SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
                           vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
                           int VertexCount, int IndexCount);
 SAV_API void DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, vec4 Color);
 SAV_API void DrawRect(rect Rect, vec4 Color);
+
+SAV_API void BeginCameraMode(camera_2d *Camera);
+SAV_API void EndCameraMode();
 
 SAV_API sav_image SavLoadImage(const char *Path);
 SAV_API void SavFreeImage(sav_image *Image);
