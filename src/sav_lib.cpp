@@ -307,6 +307,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO);
 
                 GlState->Projection = Mat4GetOrthographicProjection(0.0f, (f32) ScreenWidth, (f32) ScreenHeight, 0.0f, -1.0f, 1.0f);
+
+                SDL_GL_SetSwapInterval(0);
             }
             else
             {
@@ -335,27 +337,6 @@ PollEvents(b32 *Quit)
 {
     sdl_state *SdlState = &gSdlState;
     input_state *InputState = &gInputState;
-
-    if (SdlState->LastCounter)
-    {
-        u64 CurrentCounter = SDL_GetPerformanceCounter();
-        u64 CounterElapsed = CurrentCounter - SdlState->LastCounter;
-        SdlState->LastCounter = CurrentCounter;
-        SdlState->PrevDelta = (f64) CounterElapsed / (f64) SdlState->PerfCounterFreq;
-
-        SdlState->DeltaSamples[SdlState->CurrentTimingStatSample++] = SdlState->PrevDelta;
-        if (SdlState->CurrentTimingStatSample >= TIMING_STAT_AVG_COUNT)
-        {
-            SdlState->AvgDelta = GetAvgDelta(SdlState->DeltaSamples, TIMING_STAT_AVG_COUNT);
-            SdlState->CurrentTimingStatSample = 0;
-        }
-    }
-    else
-    {
-        SdlState->LastCounter = SDL_GetPerformanceCounter();
-    }
-    
-    gCurrentFrame++;
 
     for (int i = 0; i < SDL_NUM_SCANCODES; i++)
     {
@@ -568,6 +549,51 @@ i32 MouseWheel()
 //
 // NOTE: Timing
 //
+void
+StartTimersForFrame()
+{
+    sdl_state *SdlState = &gSdlState;
+    input_state *InputState = &gInputState;
+
+    if (SdlState->LastCounter)
+    {
+        u64 CurrentCounter = SDL_GetPerformanceCounter();
+        u64 CounterElapsed = CurrentCounter - SdlState->LastCounter;
+        SdlState->LastCounter = CurrentCounter;
+        SdlState->PrevDelta = (f64) CounterElapsed / (f64) SdlState->PerfCounterFreq;
+
+        SdlState->DeltaSamples[SdlState->CurrentTimingStatSample++] = SdlState->PrevDelta;
+        if (SdlState->CurrentTimingStatSample >= TIMING_STAT_AVG_COUNT)
+        {
+            SdlState->AvgDelta = GetAvgDelta(SdlState->DeltaSamples, TIMING_STAT_AVG_COUNT);
+            SdlState->CurrentTimingStatSample = 0;
+        }
+    }
+    else
+    {
+        SdlState->LastCounter = SDL_GetPerformanceCounter();
+    }
+    
+    gCurrentFrame++;
+}
+
+void
+EndTimersForFrame()
+{
+    sdl_state *SdlState = &gSdlState;
+    f64 DesiredFPS = 165.0;
+    f64 DesiredDelta = 1.0 / DesiredFPS;
+    f64 DesiredElapsedF = (DesiredDelta * SdlState->PerfCounterFreq);
+    u64 DesiredElapsed = (u64)(DesiredDelta * SdlState->PerfCounterFreq);
+
+    u64 CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+    // TraceLog("Before: %lld (Desired: %lld)", CounterElapsed, DesiredElapsed);
+    while (CounterElapsed < DesiredElapsed)
+    {
+        CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+    }
+    // TraceLog("After: %lld", CounterElapsed);
+}
 
 u64 GetCurrentFrame()
 {
@@ -575,7 +601,7 @@ u64 GetCurrentFrame()
 }
 f64 GetDeltaFixed()
 {
-    return 0.16; // TODO: Fixed framerate game logic
+    return 0.00609547959233432486; // TODO: Fixed framerate game logic. This is for 164.056 Hz
 }
 f64 GetDeltaPrev()
 {
@@ -757,6 +783,7 @@ SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
     glUniformMatrix4fv(UniformLocation, 1, false, Value);
 }
 
+
 void
 BeginDraw()
 {
@@ -765,6 +792,8 @@ BeginDraw()
     gl_state *GlState = &gGlState;
     UseProgram(GlState->ShaderProgram);
     SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 }
 
 void
@@ -913,7 +942,7 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
                  ArrayCount(Positions), ArrayCount(Indices));
 
     glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
-}
+    }
 
 void
 DrawRect(rect Rect, vec4 Color)

@@ -1255,6 +1255,22 @@ Mat4GetOrthographicProjection(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near
     return Result;
 }
 
+mat4
+TestDoubleOrtho(f64 Left, f64 Right, f64 Bottom, f64 Top, f64 Near, f64 Far)
+{
+    mat4 Result = {};
+    
+    Result.E[0][0] = (f32) (2.0 / (Right - Left));
+    Result.E[1][1] = (f32) (2.0 / (Top - Bottom));
+    Result.E[2][2] = (f32) (-2.0 / (Far - Near));
+    Result.E[3][0] = (f32) ((Right + Left) / (Left - Right));
+    Result.E[3][1] = (f32) ((Top + Bottom) / (Bottom - Top));
+    Result.E[3][2] = (f32) ((Far + Near) / (Near - Far));
+    Result.E[3][3] = (f32) (1.0);
+
+    return Result;
+}
+
 // -------------------------------------------------------------------------------
 // VECTOR 2 INTEGER --------------------------------------------------------------
 // -------------------------------------------------------------------------------

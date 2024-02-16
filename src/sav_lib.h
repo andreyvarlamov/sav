@@ -100,6 +100,8 @@ SAV_API b32 MouseReleased(int Button);
 SAV_API b32 MouseClicks(int Button, int Clicks);
 SAV_API i32 MouseWheel();
 
+SAV_API void StartTimersForFrame();
+SAV_API void EndTimersForFrame();
 SAV_API u64 GetCurrentFrame();
 SAV_API f64 GetDeltaFixed();
 SAV_API f64 GetDeltaPrev();

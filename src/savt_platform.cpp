@@ -24,6 +24,10 @@ int main(int argc, char **argv)
     b32 ShouldQuit = false;
     while (!ShouldQuit)
     {
+        StartTimersForFrame();
+        
+        b32 Reloaded = ReloadGameCode((void **) &UpdateAndRender);
+        
         PollEvents(&ShouldQuit);
             
         if (KeyPressed(SDL_SCANCODE_ESCAPE))
@@ -40,13 +44,13 @@ int main(int argc, char **argv)
         {
             ReloadGameMemoryDump(GameMemory);
         }
-
-        b32 Reloaded = ReloadGameCode((void **) &UpdateAndRender);
                         
         if (UpdateAndRender)
         {
             UpdateAndRender(&ShouldQuit, Reloaded, GameMemory);
         }
+
+        EndTimersForFrame();
     }
 
     Quit();
