@@ -62,12 +62,22 @@ struct sav_texture
     int Height;
 };
 
+enum { CAMERA_MAX_ZOOM_STEPS = 16 };
+
 struct camera_2d
 {
     vec2 Target;
     vec2 Offset;
     f32 Rotation;
     f32 Zoom;
+
+    f32 ZoomMin;
+    f32 ZoomMax;
+    f32 ZoomLog;
+    
+    f32 ZoomLogSteps[CAMERA_MAX_ZOOM_STEPS];
+    int ZoomLogStepsCurrent;
+    int ZoomLogStepsCount;
 };
 
 SAV_API game_memory AllocGameMemory(size_t Size);
@@ -128,6 +138,9 @@ SAV_API void DrawRect(rect Rect, vec4 Color);
 
 SAV_API void BeginCameraMode(camera_2d *Camera);
 SAV_API void EndCameraMode();
+SAV_API void CameraIncreaseLogZoom(camera_2d *Camera, f32 Delta);
+SAV_API void CameraInitLogZoomSteps(camera_2d *Camera, f32 Min, f32 Max, int StepCount);
+SAV_API void CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps);
 
 SAV_API sav_image SavLoadImage(const char *Path);
 SAV_API void SavFreeImage(sav_image *Image);

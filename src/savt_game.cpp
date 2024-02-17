@@ -51,17 +51,16 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         
         GameState->Texture = SavLoadTexture("res/test.png");
 
-        GameState->Camera.Target = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
-        // TODO: Camera offset needs to be updated in poll events (game has no access to it) for it to follow the resolution of the window
-        GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
         GameState->Camera.Rotation = 0.0f;
-        GameState->Camera.Zoom = 1.0f;
-
+        
+        CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 10.0f, 10);
         
         GameState->IsInitialized = true;
     }
 
     MemoryArena_Reset(&GameState->TransientArena);
+
+    GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
 
     if (KeyPressed(SDL_SCANCODE_F11))
     {
@@ -118,11 +117,26 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
     
     f32 MovementSpeed = 1000.0f;
-    GameState->Camera.Target += dP * MovementSpeed * (f32) GetDeltaPrev();
+    GameState->Camera.Target += dP * MovementSpeed * (f32) GetDeltaFixed();
 
+    if (GetCurrentFrame() % 50 == 0)
+    {
+        TraceLog("%f, %f", GameState->Camera.Target.X, GameState->Camera.Target.Y);
+    }
+
+    f32 RotSpeed = 100.0f;
+    if (KeyDown(SDL_SCANCODE_RIGHT))
+    {
+        GameState->Camera.Rotation += RotSpeed * (f32) GetDeltaFixed();
+    }
+    if (KeyDown(SDL_SCANCODE_LEFT))
+    {
+        GameState->Camera.Rotation -= RotSpeed * (f32) GetDeltaFixed();
+    }
+    
     if (MouseWheel() != 0)
     {
-        GameState->Camera.Zoom += 0.1f * (f32) MouseWheel();
+        CameraIncreaseLogZoomSteps(&GameState->Camera, MouseWheel());
     }
 
     BeginDraw();
@@ -143,6 +157,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     EndDraw();
     
     char Title[256];
-    sprintf_s(Title, "SAV %0.3f FPS | %0.3f ms", GetFPSAvg(), GetDeltaAvg());
+    sprintf_s(Title, "SAV %0.3f FPS | %0.9f ms", GetFPSAvg(), GetDeltaAvg());
     SetWindowTitle(Title);
 }

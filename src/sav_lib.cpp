@@ -575,7 +575,7 @@ u64 GetCurrentFrame()
 }
 f64 GetDeltaFixed()
 {
-    return 0.16; // TODO: Fixed framerate game logic
+    return 0.00609547959233432486; // TODO: Fixed framerate game logic
 }
 f64 GetDeltaPrev()
 {
@@ -934,11 +934,14 @@ void
 BeginCameraMode(camera_2d *Camera)
 {
     gl_state *GlState = &gGlState;
+
     mat4 Translation = Mat4GetTranslation(-Vec3(Camera->Target));
+    mat4 Scale = Mat4GetScale(Vec3(Camera->Zoom, Camera->Zoom, 1.0f));
     mat4 Rotation = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(Camera->Rotation)));
-    mat4 Scale = Mat4GetScale(Vec3(Camera->Zoom, Camera->Zoom, 0));
     mat4 Offset = Mat4GetTranslation(Vec3(Camera->Offset));
-    mat4 MVP = GlState->Projection * (Translation * Rotation * Scale * Offset);
+    
+    mat4 MVP = GlState->Projection * Offset * Rotation * Scale * Translation;
+    
     SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
 }
 
@@ -947,6 +950,99 @@ EndCameraMode()
 {
     gl_state *GlState = &gGlState;
     SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+}
+
+inline f32
+ExponentialInterpolation(f32 Min, f32 Max, f32 T)
+{
+    f32 LogMin = log(Min);
+    f32 LogMax = log(Max);
+    f32 Lerp = LogMin + (LogMax - LogMin) * T;
+    
+    f32 Result = exp(Lerp);
+    return Result;
+}
+
+inline f32
+ExponentialInterpolationWhereIs(f32 Min, f32 Max, f32 V)
+{
+    f32 LogMin = log(Min);
+    f32 LogMax = log(Max);
+    f32 LogV = log(V);
+
+    f32 Result;
+    
+    if (LogV >= LogMax)
+    {
+        Result = 1.0f;
+    }
+    else if (LogV <= LogMin)
+    {
+        Result = 0.0f;
+    }
+    else
+    {
+        Result = (LogV - LogMin) / (LogMax - LogMin);
+    }
+    
+    return Result;
+}
+
+void
+CameraIncreaseLogZoom(camera_2d *Camera, f32 Delta)
+{
+    Camera->ZoomLog += Delta;
+    if (Camera->ZoomLog > 1.0f)
+    {
+        Camera->ZoomLog = 1.0f;
+    }
+    else if (Camera->ZoomLog < 0.0f)
+    {
+        Camera->ZoomLog = 0.0f;
+    }
+
+    Camera->Zoom = ExponentialInterpolation(Camera->ZoomMin, Camera->ZoomMax, Camera->ZoomLog);
+}
+
+void
+CameraInitLogZoomSteps(camera_2d *Camera, f32 Min, f32 Max, int StepCount)
+{
+    Assert(StepCount > 1 && StepCount < CAMERA_MAX_ZOOM_STEPS);
+    
+    f32 StepDelta = 1.0f / (StepCount - 1);
+    f32 LogZoomNeutral = ExponentialInterpolationWhereIs(Min, Max, 1.0f);
+
+    int iClosestToNeutral = 0;
+    f32 DistToNeutral = FLT_MAX;
+
+    f32 CurrentDelta = 0.0f;
+    for (int i = 0; i < StepCount; i++)
+    {
+        f32 CurrDistToNeutral = AbsF(CurrentDelta - LogZoomNeutral);
+        if (CurrDistToNeutral < DistToNeutral)
+        {
+            DistToNeutral = CurrDistToNeutral;
+            iClosestToNeutral = i;
+        }
+        
+        Camera->ZoomLogSteps[Camera->ZoomLogStepsCount++] = CurrentDelta;
+        CurrentDelta += StepDelta;
+    }
+
+    Camera->ZoomMin = Min;
+    Camera->ZoomMax = Max;
+    Camera->ZoomLogStepsCurrent = iClosestToNeutral;
+    Camera->ZoomLogSteps[iClosestToNeutral] = LogZoomNeutral;
+    CameraIncreaseLogZoomSteps(Camera, 0);
+}
+
+void
+CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps)
+{
+    Camera->ZoomLogStepsCurrent = (Camera->ZoomLogStepsCurrent + Steps) % Camera->ZoomLogStepsCount;
+    if (Camera->ZoomLogStepsCurrent < 0) Camera->ZoomLogStepsCurrent += Camera->ZoomLogStepsCount;
+
+    Camera->Zoom = ExponentialInterpolation(Camera->ZoomMin, Camera->ZoomMax, Camera->ZoomLogSteps[Camera->ZoomLogStepsCurrent]);
 }
 
 //
