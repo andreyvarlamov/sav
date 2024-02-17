@@ -957,7 +957,7 @@ CameraWorldToScreen(camera_2d *Camera, vec2 World)
 vec2
 CameraScreenToWorld(camera_2d *Camera, vec2 Screen)
 {
-    mat4 ViewInv = Mat4GetCamera2DViewInvRel(Camera->Zoom, Camera->Rotation);
+    mat4 ViewInv = Mat4GetCamera2DViewInv(Camera->Target, Camera->Zoom, Camera->Rotation, Camera->Offset);
     vec4 Result = ViewInv * Vec4(Screen, 0.0f, 1.0f);
     return Vec2(Result);
 }
