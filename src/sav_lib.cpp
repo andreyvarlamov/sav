@@ -12,6 +12,7 @@
 #include <sdl2/SDL.h>
 #include <sdl2/SDL_mixer.h>
 #include <sdl2/SDL_image.h>
+#include <sdl2/SDL_ttf.h>
 
 #include <cstdio>
 
@@ -266,11 +267,17 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                                             SdlState->WindowSize.Width, SdlState->WindowSize.Height,
                                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
-        i32 SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
-        i32 IMGInitResult = IMG_Init(SDLImageFlags);
+        int SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
+        int IMGInitResult = IMG_Init(SDLImageFlags);
         if (!(IMGInitResult & SDLImageFlags))
         {
             printf("SDL failed to init SDL_image\n");
+            return false;
+        }
+
+        if (TTF_Init() != 0)
+        {
+            printf("SDL failed to init SDL_ttf\n");
             return false;
         }
 
@@ -292,6 +299,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
 
+                // NOTE: GL INIT
+
                 // TODO: Don't do the following things in this function
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -304,7 +313,9 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 GlState->DefaultTextureGlid = DefaultTexture.Glid;
 
                 GlState->ShaderProgram = BuildBasicShader();
-                PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO);
+                GlState->MaxVertexCount = 4096;
+                GlState->MaxIndexCount = 16384;
+                PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO, GlState->MaxVertexCount, GlState->MaxIndexCount);
 
                 GlState->Projection = Mat4GetOrthographicProjection(0.0f, (f32) ScreenWidth, (f32) ScreenHeight, 0.0f, -1.0f, 1.0f);
             }
@@ -773,13 +784,9 @@ EndDraw()
     SDL_GL_SwapWindow(gSdlState.Window);
 }
 
-enum { GPU_VERT_COUNT = 256 };
-enum { GPU_INDEX_COUNT = 1024 };
-
 void
-PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
+PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertCount, int MaxIndexCount)
 {
-    u32 MaxVertCount = GPU_VERT_COUNT;
     size_t BytesPerVertex = (3 + 2 + 4) * sizeof(float);
     
     glGenVertexArrays(1, VAO);
@@ -803,7 +810,7 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
     glGenBuffers(1, EBO);
     Assert(*EBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GPU_INDEX_COUNT * sizeof(u32), 0, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, MaxIndexCount * sizeof(u32), 0, GL_DYNAMIC_DRAW);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -814,20 +821,18 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO)
 void
 DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
              vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
-             int VertexCount, int IndexCount)
+             int VertexCount, int MaxVertexCount, int IndexCount)
 {
     Assert(Positions);
     Assert(TexCoords);
     Assert(Colors);
     Assert(VertexCount > 0);
     
-    u32 MaxVertCount = GPU_VERT_COUNT;
-    
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
     glBufferSubData(GL_ARRAY_BUFFER, 0, VertexCount*sizeof(vec3), Positions);
-    glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
-    glBufferSubData(GL_ARRAY_BUFFER, MaxVertCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
+    glBufferSubData(GL_ARRAY_BUFFER, MaxVertexCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
+    glBufferSubData(GL_ARRAY_BUFFER, MaxVertexCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -835,12 +840,12 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, IndexCount * sizeof(float), Indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     
-    glUseProgram(ShaderProgram);
+    // glUseProgram(ShaderProgram);
     glBindVertexArray(VAO);
     glDrawElements(GL_TRIANGLES, IndexCount, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 
-    glUseProgram(0);
+    // glUseProgram(0);
 }
 
 void
@@ -910,7 +915,7 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
     gl_state *GlState = &gGlState;
     DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
                  Positions, TexCoords, Colors, Indices,
-                 ArrayCount(Positions), ArrayCount(Indices));
+                 ArrayCount(Positions), GlState->MaxVertexCount, ArrayCount(Indices));
 
     glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 }
@@ -927,7 +932,7 @@ DrawRect(rect Rect, vec4 Color)
     gl_state *GlState = &gGlState;
     DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
                  Positions, TexCoords, Colors, Indices,
-                 ArrayCount(Positions), ArrayCount(Indices));
+                 ArrayCount(Positions), GlState->MaxVertexCount, ArrayCount(Indices));
 }
 
 void
@@ -1144,10 +1149,10 @@ SavLoadTextureFromImage(sav_image Image)
 sav_texture
 SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
 {
-    u32 TextureID;
-    glGenTextures(1, &TextureID);
-    Assert(TextureID);
-    glBindTexture(GL_TEXTURE_2D, TextureID);
+    u32 Glid;
+    glGenTextures(1, &Glid);
+    Assert(Glid);
+    glBindTexture(GL_TEXTURE_2D, Glid);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, Data);
 
     // TODO: Set these dynamically
@@ -1160,17 +1165,370 @@ SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
     glBindTexture(GL_TEXTURE_2D, 0);
 
     sav_texture Texture = {};
-    Texture.Glid = TextureID;
+    Texture.Glid = Glid;
     Texture.Width = Width;
     Texture.Height = Height;
     return Texture;
 }
 
 //
+// NOTE: Fonts and text rendering
+//
+
+u32
+LoadTextureFromFont(void *Data, u32 Width, u32 Height)
+{
+    u32 Glid;
+    glGenTextures(1, &Glid);
+    Assert(Glid);
+    glBindTexture(GL_TEXTURE_2D, Glid);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, Data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return Glid;
+}
+
+sav_font *
+SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
+{
+    // NOTE: Allocate memory for the font info and glyph infos
+    sav_font *Font = MemoryArena_PushStruct(Arena, sav_font);
+    *Font = {};
+
+    Font->GlyphCount = 128;
+    Font->GlyphInfos = MemoryArena_PushArray(Arena, Font->GlyphCount, glyph_info);
+
+    // NOTE: Allocate temp memory for the rendered glyphs (just the pointers, image bytes are handled by SDL)
+    MemoryArena_Freeze(Arena);
+    SDL_Surface **GlyphImages = MemoryArena_PushArray(Arena, Font->GlyphCount, SDL_Surface *);
+    for (int GlyphIndex = 0;
+         GlyphIndex < Font->GlyphCount;
+         ++GlyphIndex)
+    {
+        Font->GlyphInfos[GlyphIndex] = {};
+        GlyphImages[GlyphIndex] = {};
+    }
+
+    // NOTE: Use platform layer to load font
+    TTF_Font *SdlFont = TTF_OpenFont(Path, PointSize);
+    if (SdlFont == 0)
+    {
+        const char *Error = SDL_GetError();
+        TraceLog("SDL failed to load ttf font at %s:\n%s", Path, Error);
+        return 0;
+    }
+    Font->PointSize = (f32)PointSize;
+    Font->Height = TTF_FontHeight(SdlFont);
+    int BytesPerPixel = 4;
+
+    // NOTE: Render each glyph into an image, get glyph metrics and get max glyph width to allocate bytes for the atlas
+    int MaxGlyphWidth = 0;
+    int MaxGlyphHeight = 0;
+    for (u8 GlyphChar = 32;
+         GlyphChar < Font->GlyphCount;
+         ++GlyphChar)
+    {
+        glyph_info *GlyphInfo = Font->GlyphInfos + GlyphChar;
+
+        TTF_GlyphMetrics(SdlFont, (char) GlyphChar,
+                                 &GlyphInfo->MinX, &GlyphInfo->MaxX, &GlyphInfo->MinY, &GlyphInfo->MaxY, &GlyphInfo->Advance);
+
+        SDL_Surface *GlyphImage = TTF_RenderGlyph_Blended(SdlFont, (char) GlyphChar, SDL_Color { 255, 255, 255, 255 });
+        if (GlyphImage->w > MaxGlyphWidth)
+        {
+            MaxGlyphWidth = GlyphImage->w;
+        }
+        if (GlyphImage->h > MaxGlyphHeight)
+        {
+            MaxGlyphHeight = GlyphImage->h;
+        }
+        Assert(GlyphImage->format->BytesPerPixel == BytesPerPixel);
+
+        GlyphImages[GlyphChar] = GlyphImage;
+    }
+
+    //
+    // NOTE: Allocate memory for the font atlas
+    //
+    
+    // NOTE: 12x8 = 96 -> for the 95 visible glyphs
+    u32 AtlasColumns = 12;
+    u32 AtlasRows = 8;
+    u32 AtlasPxWidth = AtlasColumns * MaxGlyphWidth;
+    u32 AtlasPxHeight = AtlasRows * MaxGlyphHeight;
+    u32 AtlasPitch = BytesPerPixel * AtlasPxWidth;
+    u8 *AtlasBytes = MemoryArena_PushArray(Arena, AtlasPitch * AtlasPxHeight, u8);
+    
+    //
+    // NOTE: Blit each glyph surface to the atlas surface
+    //
+    u32 CurrentGlyphIndex = 0;
+    for (int GlyphChar = 32;
+         GlyphChar < Font->GlyphCount;
+         ++GlyphChar)
+    {
+        SDL_Surface *GlyphImage = GlyphImages[GlyphChar];
+        Assert(GlyphImage->w > 0);
+        Assert(GlyphImage->w <= MaxGlyphWidth);
+        Assert(GlyphImage->h > 0);
+        Assert(GlyphImage->h <= MaxGlyphHeight);
+        Assert(GlyphImage->format->BytesPerPixel == 4);
+        Assert(GlyphImage->pixels);
+        
+        glyph_info *GlyphInfo = Font->GlyphInfos + GlyphChar;
+
+        u32 CurrentAtlasCol = CurrentGlyphIndex % AtlasColumns;
+        u32 CurrentAtlasRow = CurrentGlyphIndex / AtlasColumns;
+        u32 AtlasPxX = CurrentAtlasCol * MaxGlyphWidth;
+        u32 AtlasPxY = CurrentAtlasRow * Font->Height;
+        size_t AtlasByteOffset = (AtlasPxY * AtlasPxWidth + AtlasPxX) * BytesPerPixel;
+
+        u8 *Dest = AtlasBytes + AtlasByteOffset;
+        u8 *Source = (u8 *) GlyphImage->pixels;
+        for (int GlyphPxY = 0;
+             GlyphPxY < GlyphImage->h;
+             ++GlyphPxY)
+        {
+            u8 *DestByte = (u8 *) Dest;
+            u8 *SourceByte = (u8 *) Source;
+            
+            for (int GlyphPxX = 0;
+                 GlyphPxX < GlyphImage->w;
+                 ++GlyphPxX)
+            {
+                for (int PixelByte = 0;
+                     PixelByte < BytesPerPixel;
+                     ++PixelByte)
+                {
+                    *DestByte++ = *SourceByte++;
+                }
+            }
+
+            Dest += AtlasPitch;
+            Source += GlyphImage->pitch;
+        }
+
+        //
+        // NOTE:Use the atlas position and width/height to calculate UVs for each glyph
+        //
+        // NOTE: It seems that SDL_ttf embeds MinX into the rendered glyph, but also it's ignored if it's less than 0
+        // Need to shift where to place glyph if MinX is negative, but if not negative, it's already included
+        // in the rendered glyph. This works but seems very finicky
+        // TODO: Just use freetype directly or stb
+        u32 GlyphTexWidth = ((GlyphInfo->MinX >= 0) ? (GlyphInfo->MaxX) : (GlyphInfo->MaxX - GlyphInfo->MinX));
+        u32 GlyphTexHeight = MaxGlyphHeight;
+        
+        f32 OneOverAtlasPxWidth = 1.0f / (f32) AtlasPxWidth;
+        f32 OneOverAtlasPxHeight = 1.0f / (f32) AtlasPxHeight;
+        f32 UVLeft = (f32) AtlasPxX * OneOverAtlasPxWidth;
+        f32 UVTop = (f32) AtlasPxY * OneOverAtlasPxHeight;
+        f32 UVRight = (f32) (AtlasPxX + GlyphTexWidth) * OneOverAtlasPxWidth;
+        f32 UVBottom = (f32) (AtlasPxY + GlyphTexHeight) * OneOverAtlasPxHeight;
+        GlyphInfo->GlyphUVs[0] = Vec2(UVLeft, UVTop);
+        GlyphInfo->GlyphUVs[1] = Vec2(UVLeft, UVBottom);
+        GlyphInfo->GlyphUVs[2] = Vec2(UVRight, UVBottom);
+        GlyphInfo->GlyphUVs[3] = Vec2(UVRight, UVTop);
+
+        SDL_FreeSurface(GlyphImage);
+
+        CurrentGlyphIndex++;
+    }
+
+    Font->AtlasGlid = LoadTextureFromFont(AtlasBytes, AtlasPxWidth, AtlasPxHeight);
+
+    SDL_Surface *AtlasImage = SDL_CreateRGBSurfaceFrom(AtlasBytes,
+                                                               AtlasPxWidth,
+                                                               AtlasPxHeight,
+                                                               BytesPerPixel * 8,
+                                                               AtlasPitch,
+                                                               0x00FF0000,
+                                                               0x0000FF00,
+                                                               0x000000FF,
+                                                               0xFF000000);
+    simple_string TempFileName = GetFilenameFromPath(Path, false);
+    simple_string TempFile = SimpleStringF("%s-%d.bmp", TempFileName.D, Font->PointSize);
+    simple_string SaveToPath = CatStrings("temp/", TempFile.D);
+    SDL_SaveBMP(AtlasImage, SaveToPath.D);
+
+    MemoryArena_Unfreeze(Arena);
+    TTF_CloseFont(SdlFont);
+    
+    return Font;
+}
+
+void
+DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, color Color, b32 DrawBg, color BgColor, memory_arena *TransientArena)
+{
+    f32 SizeRatio = PointSize / Font->PointSize;
+    
+    f32 CurrentX = X;
+    f32 MaxX = X;
+    f32 CurrentY = Y;
+
+    int StringVisibleCount = 0;
+    int StringCount;
+    for (StringCount = 0;
+         String[StringCount] != '\0';
+         ++StringCount)
+    {
+        if (String[StringCount] != '\n')
+        {
+            StringVisibleCount++;
+        }
+    }
+
+    MemoryArena_Freeze(TransientArena);
+    int VertexCount = StringVisibleCount * 4;
+    int IndexCount = StringVisibleCount * 6;
+    vec3 *Vertices = MemoryArena_PushArray(TransientArena, VertexCount, vec3);
+    vec4 *Colors = MemoryArena_PushArray(TransientArena, VertexCount, vec4);
+    // NOTE: Quick hack: use third param of uv, to add to texture's alpha, to be able to do just filled quads
+    // TODO: Do this better
+    vec2 *TexCoords = MemoryArena_PushArray(TransientArena, VertexCount, vec2); 
+    u32 *Indices = MemoryArena_PushArray(TransientArena, IndexCount, u32);
+
+    int CurrentVertexIndex = 0;
+    int CurrentTexCoordIndex = 0;
+    int CurrentColorIndex = 0;
+    int CurrentIndexIndex = 0;
+    for (int StringIndex = 0;
+         StringIndex < StringCount;
+         ++StringIndex)
+    {
+        char Glyph = String[StringIndex];
+
+        f32 sHeight = SizeRatio * Font->Height;
+        
+        if (Glyph == '\n')
+        {
+            if (CurrentX > MaxX)
+            {
+                MaxX = CurrentX;
+            }
+            CurrentX = X;
+            CurrentY += sHeight;
+            continue;
+        }
+
+        Assert(Glyph >= 32 && Glyph < Font->GlyphCount);
+        glyph_info *GlyphInfo = Font->GlyphInfos + Glyph;
+
+        f32 sMinX = SizeRatio * GlyphInfo->MinX;
+        f32 sMaxX = SizeRatio * GlyphInfo->MaxX;
+
+        f32 PxX = ((sMinX >= 0) ? CurrentX : (CurrentX + sMinX));
+        f32 PxY = CurrentY;
+        f32 PxWidth = (f32) ((sMinX >= 0) ? sMaxX : (sMaxX - sMinX));
+        f32 PxHeight = sHeight;
+
+        int BaseVertexIndex = CurrentVertexIndex;
+        Vertices[CurrentVertexIndex++] = Vec3(PxX, PxY, 0);
+        Vertices[CurrentVertexIndex++] = Vec3(PxX, PxY + PxHeight, 0);
+        Vertices[CurrentVertexIndex++] = Vec3(PxX + PxWidth, PxY + PxHeight, 0);
+        Vertices[CurrentVertexIndex++] = Vec3(PxX + PxWidth, PxY, 0);
+
+        vec4 C = ColorV4(Color);
+        Colors[CurrentColorIndex++] = C;
+        Colors[CurrentColorIndex++] = C;
+        Colors[CurrentColorIndex++] = C;
+        Colors[CurrentColorIndex++] = C;
+
+        for (int GlyphUVIndex = 0;
+             GlyphUVIndex < 4;
+             ++GlyphUVIndex)
+        {
+            TexCoords[CurrentTexCoordIndex++] = GlyphInfo->GlyphUVs[GlyphUVIndex];
+        }
+
+        u32 IndicesToCopy[] = {
+            0, 1, 3,  3, 1, 2
+        };
+
+        for (int IndexToCopyIndex = 0;
+             IndexToCopyIndex < ArrayCount(IndicesToCopy);
+             ++IndexToCopyIndex)
+        {
+            Indices[CurrentIndexIndex++] = BaseVertexIndex + IndicesToCopy[IndexToCopyIndex];
+        }
+
+        CurrentX += SizeRatio * GlyphInfo->Advance;
+    }
+    Assert(CurrentVertexIndex == VertexCount);
+    Assert(CurrentColorIndex == VertexCount);
+    Assert(CurrentTexCoordIndex == VertexCount);
+    Assert(CurrentIndexIndex == IndexCount);
+
+    gl_state *GlState = &gGlState;
+    
+    if (DrawBg)
+    {
+        f32 Pad = 2.0f;
+        f32 PxLeft = Max(0, X - Pad);
+        f32 PxTop = Max(0, Y - Pad);
+        MaxX = Max(CurrentX, MaxX);
+        f32 PxRight = MaxX + Pad;
+        f32 PxBottom = CurrentY + SizeRatio * Font->Height + Pad;
+
+        vec3 BgVertices[4];
+        BgVertices[0] = Vec3(PxLeft, PxTop, 0);
+        BgVertices[1] = Vec3(PxLeft, PxBottom, 0);
+        BgVertices[2] = Vec3(PxRight, PxBottom, 0);
+        BgVertices[3] = Vec3(PxRight, PxTop, 0);
+
+        vec4 C = ColorV4(BgColor);
+        vec4 BgColors[4];
+        BgColors[0] = C;
+        BgColors[1] = C;
+        BgColors[2] = C;
+        BgColors[3] = C;
+
+        vec2 BgTexCoords[4] = {};
+
+        u32 BgIndices[] = {
+            0, 1, 3,  3, 1, 2
+        };
+        DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
+                     BgVertices, BgTexCoords, BgColors, BgIndices,
+                     ArrayCount(BgVertices), GlState->MaxVertexCount, ArrayCount(BgIndices));
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, Font->AtlasGlid);
+
+    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
+                 Vertices, TexCoords, Colors, Indices,
+                 VertexCount, GlState->MaxVertexCount, IndexCount);
+
+    glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
+
+    MemoryArena_Unfreeze(TransientArena);
+}
+
+//
 // NOTE: Misc
 //
 
-void TraceLog(const char *Format, ...)
+const char *
+TextFormat(const char *Format, ...)
+{
+    static_p char Result[STRING_BUFFER];
+    
+    va_list VarArgs;
+    va_start(VarArgs, Format);
+    vsprintf_s(Result, STRING_BUFFER - 1, Format, VarArgs);
+    va_end(VarArgs);
+
+    return Result;
+}
+
+void
+TraceLog(const char *Format, ...)
 {
     char FormatBuf[STRING_BUFFER];
     sprintf_s(FormatBuf, "[F %06zu] %s\n", gCurrentFrame, Format);

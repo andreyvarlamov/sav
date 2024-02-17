@@ -20,6 +20,7 @@ struct game_state
 
     memory_arena RootArena;
     memory_arena WorldArena;
+    memory_arena ResourceArena;
     memory_arena TransientArena;
 
     sav_texture Texture;
@@ -29,6 +30,8 @@ struct game_state
     b32 Borderless;
 
     camera_2d Camera;
+
+    sav_font *Font;
     
     f32 MapGlyphWidth;
     f32 MapGlyphHeight;
@@ -47,15 +50,24 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->RootArena = MemoryArena(RootArenaBase, RootArenaSize);
 
         GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+        GameState->ResourceArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->TransientArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         
         GameState->Texture = SavLoadTexture("res/test.png");
 
         GameState->Camera.Rotation = 0.0f;
-        
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
+
+        // GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
+        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
         
         GameState->IsInitialized = true;
+    }
+
+    if (Reloaded)
+    {
+        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
+
     }
 
     MemoryArena_Reset(&GameState->TransientArena);
@@ -179,6 +191,15 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                         ColorV4(VA_MAROON));
         }
         EndCameraMode();
+
+        DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
+                   GameState->Font,
+                   GameState->Font->PointSize,
+                   10,
+                   10,
+                   VA_MAROON,
+                   true, ColorAlpha(VA_GRAY, 30),
+                   &GameState->TransientArena);
     } 
     EndDraw();
     

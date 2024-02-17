@@ -68,6 +68,8 @@ struct gl_state
     u32 VBO;
     u32 VAO;
     u32 EBO;
+    u32 MaxVertexCount;
+    u32 MaxIndexCount;
 
     u32 DefaultTextureGlid;
 

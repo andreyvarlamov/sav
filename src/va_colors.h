@@ -43,6 +43,13 @@ Color(u32 Color32)
     return Color;
 }
 
+inline color
+ColorAlpha(color Color, u8 A)
+{
+    Color.A = A;
+    return Color;
+}
+
 // NOTE: https://www.w3.org/wiki/CSS3/Color/Extended_color_keywords
 #define VA_ALICEBLUE Color(0xF0F8FFFF)
 #define VA_ANTIQUEWHITE Color(0xFAEBD7FF)
