@@ -771,7 +771,8 @@ SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
 void
 BeginDraw()
 {
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     gl_state *GlState = &gGlState;
     UseProgram(GlState->ShaderProgram);
@@ -949,6 +950,12 @@ EndCameraMode()
 {
     gl_state *GlState = &gGlState;
     SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+}
+
+void
+SetOrthographicProjectionMatrix(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near, f32 Far)
+{
+    gGlState.Projection = Mat4GetOrthographicProjection(Left, Right, Bottom, Top, Near, Far);
 }
 
 vec2
@@ -1131,6 +1138,41 @@ SavFreeImage(sav_image *Image)
 
 }
 
+void
+SavSaveImage(const char *Path, void *Data, int Width, int Height, b32 Flip, u32 RMask, u32 GMask, u32 BMask, u32 AMask)
+{
+    SDL_Surface *Surface = SDL_CreateRGBSurfaceFrom(Data,
+                                                    Width,
+                                                    Height,
+                                                    32,
+                                                    Width * 4,
+                                                    RMask,
+                                                    GMask,
+                                                    BMask,
+                                                    AMask);
+
+    // NOTE: Flip rows of pixels. Opengl gives pixels starting from left bottom corner
+    if (Flip)
+    {
+        char *Pixels = (char *) Surface->pixels;
+        for (int y = 0; y < Surface->h / 2; y++)
+        {
+            for (int x = 0; x < Surface->pitch; x++)
+            {
+                int oppY = Surface->h - y  - 1;
+                char Temp = Pixels[oppY * Surface->pitch + x];
+                Pixels[oppY * Surface->pitch + x] = Pixels[y * Surface->pitch + x];
+                Pixels[y * Surface->pitch + x] = Temp;
+            }
+        }
+    }
+    
+    if (IMG_SavePNG(Surface, Path) != 0)
+    {
+        TraceLog("SDL failed to save image to %s", Path);
+    }
+}
+
 sav_texture
 SavLoadTexture(const char *Path)
 {
@@ -1265,9 +1307,7 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
     u32 AtlasPitch = BytesPerPixel * AtlasPxWidth;
     u8 *AtlasBytes = MemoryArena_PushArray(Arena, AtlasPitch * AtlasPxHeight, u8);
     
-    //
     // NOTE: Blit each glyph surface to the atlas surface
-    //
     u32 CurrentGlyphIndex = 0;
     for (int GlyphChar = 32;
          GlyphChar < Font->GlyphCount;
@@ -1314,13 +1354,10 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
             Source += GlyphImage->pitch;
         }
 
-        //
         // NOTE:Use the atlas position and width/height to calculate UVs for each glyph
-        //
         // NOTE: It seems that SDL_ttf embeds MinX into the rendered glyph, but also it's ignored if it's less than 0
         // Need to shift where to place glyph if MinX is negative, but if not negative, it's already included
         // in the rendered glyph. This works but seems very finicky
-        // TODO: Just use freetype directly or stb
         u32 GlyphTexWidth = ((GlyphInfo->MinX >= 0) ? (GlyphInfo->MaxX) : (GlyphInfo->MaxX - GlyphInfo->MinX));
         u32 GlyphTexHeight = MaxGlyphHeight;
         
@@ -1342,19 +1379,10 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
 
     Font->AtlasGlid = LoadTextureFromFont(AtlasBytes, AtlasPxWidth, AtlasPxHeight);
 
-    SDL_Surface *AtlasImage = SDL_CreateRGBSurfaceFrom(AtlasBytes,
-                                                               AtlasPxWidth,
-                                                               AtlasPxHeight,
-                                                               BytesPerPixel * 8,
-                                                               AtlasPitch,
-                                                               0x00FF0000,
-                                                               0x0000FF00,
-                                                               0x000000FF,
-                                                               0xFF000000);
     simple_string TempFileName = GetFilenameFromPath(Path, false);
-    simple_string TempFile = SimpleStringF("%s-%d.bmp", TempFileName.D, Font->PointSize);
+    simple_string TempFile = SimpleStringF("%s-%.0f.png", TempFileName.D, Font->PointSize);
     simple_string SaveToPath = CatStrings("temp/", TempFile.D);
-    SDL_SaveBMP(AtlasImage, SaveToPath.D);
+    SavSaveImage(SaveToPath.D, AtlasBytes, AtlasPxWidth, AtlasPxHeight, false, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
 
     MemoryArena_Unfreeze(Arena);
     TTF_CloseFont(SdlFont);
@@ -1388,8 +1416,6 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
     int IndexCount = StringVisibleCount * 6;
     vec3 *Vertices = MemoryArena_PushArray(TransientArena, VertexCount, vec3);
     vec4 *Colors = MemoryArena_PushArray(TransientArena, VertexCount, vec4);
-    // NOTE: Quick hack: use third param of uv, to add to texture's alpha, to be able to do just filled quads
-    // TODO: Do this better
     vec2 *TexCoords = MemoryArena_PushArray(TransientArena, VertexCount, vec2); 
     u32 *Indices = MemoryArena_PushArray(TransientArena, IndexCount, u32);
 

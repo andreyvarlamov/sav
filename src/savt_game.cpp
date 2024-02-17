@@ -35,6 +35,13 @@ struct game_state
     
     f32 MapGlyphWidth;
     f32 MapGlyphHeight;
+
+
+
+
+
+    u32 FBO;
+    u32 RenderTexture;
 };
 
 GAME_API void
@@ -58,21 +65,40 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->Camera.Rotation = 0.0f;
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
 
-        // GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
-        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
+        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
+        // GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
+
+        glGenFramebuffers(1, &GameState->FBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, GameState->FBO);
+
+        glGenTextures(1, &GameState->RenderTexture);
+        glBindTexture(GL_TEXTURE_2D, GameState->RenderTexture);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GameState->RenderTexture, 0);
+
+        u32 RBO;
+        glGenRenderbuffers(1, &RBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, RBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, GetWindowSize().OriginalWidth,  GetWindowSize().OriginalHeight);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            TraceLog("GL Framebuffer is not complete.");
+        }
+        glBindRenderbuffer(GL_RENDERBUFFER, RBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         
         GameState->IsInitialized = true;
     }
 
-    if (Reloaded)
-    {
-        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
-
-    }
-
     MemoryArena_Reset(&GameState->TransientArena);
 
-    GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
+    GameState->Camera.Offset = Vec2(GetWindowSize().OriginalWidth / 2.0f, GetWindowSize().OriginalHeight / 2.0f);
 
     if (KeyPressed(SDL_SCANCODE_F11))
     {
@@ -179,12 +205,31 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     BeginDraw();
     {
+        glBindFramebuffer(GL_FRAMEBUFFER, GameState->FBO);
+
+        if (KeyPressed(SDL_SCANCODE_F10))
+        {
+            int Width = GetWindowSize().OriginalWidth;
+            int Height = GetWindowSize().OriginalHeight;
+            void *PixelData = (void *) MemoryArena_PushArray(&GameState->TransientArena, Width*Height, u8); 
+            glReadPixels(0, 0, Width, Height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, PixelData);
+            SavSaveImage("temp/screen.png", PixelData, Width, Height, true,
+                         0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+        }
+        
+        glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glViewport(0, 0, GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight);
+        SetOrthographicProjectionMatrix(0.0f, (f32) GetWindowSize().OriginalWidth, (f32) GetWindowSize().OriginalHeight, 0.0f, -1.0f, 1.0f);
+
+        // glEnable(GL_DEPTH_TEST);
+        
         BeginCameraMode(&GameState->Camera);
         {
             DrawRect(Rect(0, 0, 1600, 500), ColorV4(VA_AQUAMARINE));
 
             DrawTexture(GameState->Texture,
-                        Rect(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
+                        Rect(GetWindowSize().OriginalWidth / 2.0f, GetWindowSize().OriginalHeight / 2.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
                         Rect(GameState->Texture.Width, GameState->Texture.Height),
                         Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
                         Rot,
@@ -200,6 +245,23 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    VA_MAROON,
                    true, ColorAlpha(VA_GRAY, 30),
                    &GameState->TransientArena);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // glDisable(GL_DEPTH_TEST);
+        glViewport(0, 0, GetWindowSize().Width, GetWindowSize().Height);
+        SetOrthographicProjectionMatrix(0.0f, (f32) GetWindowSize().Width, (f32) GetWindowSize().Height, 0.0f, -1.0f, 1.0f);
+        EndCameraMode(); // HACK HAHAHA
+
+        sav_texture RenderTexture;
+        RenderTexture.Glid = GameState->RenderTexture;
+        RenderTexture.Width = GetWindowSize().OriginalWidth;
+        RenderTexture.Height = GetWindowSize().OriginalHeight;
+        DrawTexture(RenderTexture,
+                    Rect((f32) GetWindowSize().Width, (f32) GetWindowSize().Height),
+                    Rect(RenderTexture.Width, RenderTexture.Height),
+                    Vec2(),
+                    0.0f,
+                    ColorV4(VA_WHITE));
     } 
     EndDraw();
     

@@ -160,6 +160,7 @@ SAV_API void DrawRect(rect Rect, vec4 Color);
 
 SAV_API void BeginCameraMode(camera_2d *Camera);
 SAV_API void EndCameraMode();
+SAV_API void SetOrthographicProjectionMatrix(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near, f32 Far);
 SAV_API vec2 CameraWorldToScreen(camera_2d *Camera, vec2 World);
 SAV_API vec2 CameraScreenToWorld(camera_2d *Camera, vec2 Screen);
 SAV_API vec2 CameraScreenToWorldRel(camera_2d *Camera, vec2 Screen);
@@ -169,6 +170,7 @@ SAV_API void CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps);
 
 SAV_API sav_image SavLoadImage(const char *Path);
 SAV_API void SavFreeImage(sav_image *Image);
+SAV_API void SavSaveImage(const char *Path, void *Data, int Width, int Height, b32 Flip, u32 RMask, u32 GMask, u32 BMask, u32 AMask);
 SAV_API sav_texture SavLoadTexture(const char *Path);
 SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
 SAV_API sav_texture SavLoadTextureFromData(void *ImageData, u32 Width, u32 Height);
