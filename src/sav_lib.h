@@ -138,6 +138,9 @@ SAV_API void DrawRect(rect Rect, vec4 Color);
 
 SAV_API void BeginCameraMode(camera_2d *Camera);
 SAV_API void EndCameraMode();
+SAV_API vec2 CameraWorldToScreen(camera_2d *Camera, vec2 World);
+SAV_API vec2 CameraScreenToWorld(camera_2d *Camera, vec2 Screen);
+SAV_API vec2 CameraScreenToWorldRel(camera_2d *Camera, vec2 Screen);
 SAV_API void CameraIncreaseLogZoom(camera_2d *Camera, f32 Delta);
 SAV_API void CameraInitLogZoomSteps(camera_2d *Camera, f32 Min, f32 Max, int StepCount);
 SAV_API void CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps);

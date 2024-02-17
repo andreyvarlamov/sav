@@ -53,7 +53,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         GameState->Camera.Rotation = 0.0f;
         
-        CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 10.0f, 10);
+        CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
         
         GameState->IsInitialized = true;
     }
@@ -119,10 +119,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     f32 MovementSpeed = 1000.0f;
     GameState->Camera.Target += dP * MovementSpeed * (f32) GetDeltaFixed();
 
+#if 0
     if (GetCurrentFrame() % 50 == 0)
     {
         TraceLog("%f, %f", GameState->Camera.Target.X, GameState->Camera.Target.Y);
     }
+#endif
 
     f32 RotSpeed = 100.0f;
     if (KeyDown(SDL_SCANCODE_RIGHT))
@@ -137,6 +139,30 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (MouseWheel() != 0)
     {
         CameraIncreaseLogZoomSteps(&GameState->Camera, MouseWheel());
+        TraceLog("Changed zoom to: %f", GameState->Camera.Zoom);
+    }
+
+    if(MousePressed(1))
+    {
+        vec2 SMouseP = Vec2((f32) GetMousePos().X, (f32) GetMousePos().Y);
+        vec2 WMouseP = CameraScreenToWorld(&GameState->Camera, SMouseP);
+        vec2 B2SMouseP = CameraWorldToScreen(&GameState->Camera, WMouseP);
+        
+        TraceLog("SMouseP: (%f, %f); WMouseP: (%f, %f); B2SMouseP: (%f, %f)",
+                 SMouseP.X, SMouseP.Y,
+                 WMouseP.X, WMouseP.Y,
+                 B2SMouseP.X, B2SMouseP.Y);
+    }
+
+    if (MouseDown(2))
+    {
+        vec2 SMouseRelP = Vec2((f32) GetMouseRelPos().X, (f32) GetMouseRelPos().Y);
+
+        vec2 WMouseRelP = CameraScreenToWorldRel(&GameState->Camera, SMouseRelP);
+         
+        GameState->Camera.Target -= WMouseRelP;
+
+        TraceLog("%f, %f", GameState->Camera.Target.X, GameState->Camera.Target.Y);
     }
 
     BeginDraw();

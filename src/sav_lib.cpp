@@ -934,14 +934,8 @@ void
 BeginCameraMode(camera_2d *Camera)
 {
     gl_state *GlState = &gGlState;
-
-    mat4 Translation = Mat4GetTranslation(-Vec3(Camera->Target));
-    mat4 Scale = Mat4GetScale(Vec3(Camera->Zoom, Camera->Zoom, 1.0f));
-    mat4 Rotation = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(Camera->Rotation)));
-    mat4 Offset = Mat4GetTranslation(Vec3(Camera->Offset));
-    
-    mat4 MVP = GlState->Projection * Offset * Rotation * Scale * Translation;
-    
+    mat4 View = Mat4GetCamera2DView(Camera->Target, Camera->Zoom, Camera->Rotation, Camera->Offset);
+    mat4 MVP = GlState->Projection * View;
     SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
 }
 
@@ -950,6 +944,30 @@ EndCameraMode()
 {
     gl_state *GlState = &gGlState;
     SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+}
+
+vec2
+CameraWorldToScreen(camera_2d *Camera, vec2 World)
+{
+    mat4 View = Mat4GetCamera2DView(Camera->Target, Camera->Zoom, Camera->Rotation, Camera->Offset);
+    vec4 Result = View * Vec4(World, 0.0f, 1.0f);
+    return Vec2(Result);
+}
+
+vec2
+CameraScreenToWorld(camera_2d *Camera, vec2 Screen)
+{
+    mat4 ViewInv = Mat4GetCamera2DViewInvRel(Camera->Zoom, Camera->Rotation);
+    vec4 Result = ViewInv * Vec4(Screen, 0.0f, 1.0f);
+    return Vec2(Result);
+}
+
+vec2
+CameraScreenToWorldRel(camera_2d *Camera, vec2 Screen)
+{
+    mat4 ViewInvRel = Mat4GetCamera2DViewInvRel(Camera->Zoom, Camera->Rotation);
+    vec4 Result = ViewInvRel * Vec4(Screen, 0.0f, 1.0f);
+    return Vec2(Result);
 }
 
 inline f32
@@ -1039,8 +1057,9 @@ CameraInitLogZoomSteps(camera_2d *Camera, f32 Min, f32 Max, int StepCount)
 void
 CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps)
 {
-    Camera->ZoomLogStepsCurrent = (Camera->ZoomLogStepsCurrent + Steps) % Camera->ZoomLogStepsCount;
-    if (Camera->ZoomLogStepsCurrent < 0) Camera->ZoomLogStepsCurrent += Camera->ZoomLogStepsCount;
+    Camera->ZoomLogStepsCurrent += Steps;
+    if (Camera->ZoomLogStepsCurrent < 0) Camera->ZoomLogStepsCurrent = 0;
+    if (Camera->ZoomLogStepsCurrent > (Camera->ZoomLogStepsCount - 1)) Camera->ZoomLogStepsCurrent = (Camera->ZoomLogStepsCount - 1);
 
     Camera->Zoom = ExponentialInterpolation(Camera->ZoomMin, Camera->ZoomMax, Camera->ZoomLogSteps[Camera->ZoomLogStepsCurrent]);
 }

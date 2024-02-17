@@ -231,6 +231,13 @@ Vec3(vec2 V)
     return Result;
 }
 
+inline vec2
+Vec2(vec3 V)
+{
+    vec2 Result = Vec2(V.X, V.Y);
+    return Result;
+}
+
 inline vec3
 operator+(vec3 V0, vec3 V1)
 {
@@ -454,10 +461,24 @@ Vec4(vec3 V)
     return Result;
 }
 
+inline vec4
+Vec4(vec2 V, f32 Z, f32 W)
+{
+    vec4 Result = Vec4(V.X, V.Y, Z, W);
+    return Result;
+}
+
 inline vec3
 Vec3(vec4 V)
 {
     vec3 Result = Vec3(V.X, V.Y, V.Z);
+    return Result;
+}
+
+inline vec2
+Vec2(vec4 V)
+{
+    vec2 Result = Vec2(Vec3(V));
     return Result;
 }
 
@@ -1252,6 +1273,84 @@ Mat4GetOrthographicProjection(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near
     Result.E[3][2] = (Far + Near) / (Near - Far);
     Result.E[3][3] = 1.0f;
 
+    return Result;
+}
+
+inline mat4
+Mat4GetCamera2DView(vec2 Target, f32 S, f32 Rot, vec2 Offset)
+{
+    /*
+     * This is this but hardcoded:
+       mat4 Translation = Mat4GetTranslation(-Vec3(Target));
+       mat4 Scale = Mat4GetScale(Vec3(S, S, 1.0f));
+       mat4 Rotation = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(Rot)));
+       mat4 Offset = Mat4GetTranslation(Vec3(Offset));
+       mat4 Calc = Offset * Rotation * Scale * Translation;
+    */
+
+    mat4 Result = Mat4(1.0f);
+    f32 CosRot = CosF(ToRadiansF(Rot));
+    f32 SinRot = SinF(ToRadiansF(Rot));
+    vec2 T = -Target;
+    
+    Result.E[0][0] = S * CosRot;
+    Result.E[0][1] = S * SinRot;
+    Result.E[1][0] = -S * SinRot;
+    Result.E[1][1] = S * CosRot;
+    Result.E[3][0] = S * T.X * CosRot - S * T.Y * SinRot + Offset.X;
+    Result.E[3][1] = S * T.X * SinRot + S * T.Y * CosRot + Offset.Y;
+ 
+    return Result;
+}
+
+inline mat4
+Mat4GetCamera2DViewInv(vec2 Target, f32 S, f32 Rot, vec2 Offset)
+{
+    /*
+     * This is this but hardcoded:
+       mat4 OffsetInv = Mat4GetTranslation(-Vec3(Offset));
+       mat4 RotationInv = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(-Rot)));
+       mat4 ScaleInv = Mat4GetScale(Vec3(1.0f/S, 1.0f.S, 1.0f));
+       mat4 TranslationInv = Mat4GetTranslation(Vec3(Target));
+       mat4 CalcInv = TranslationInv * ScaleInv * RotationInv * OffsetInv;
+    */
+
+    mat4 Result = Mat4(1.0f);
+    f32 CosRot = CosF(ToRadiansF(Rot));
+    f32 SinRot = SinF(ToRadiansF(Rot));
+    vec2 T = -Target;
+    f32 ooS = 1.0f / S;
+    
+    Result.E[0][0] = ooS * CosRot;
+    Result.E[0][1] = -ooS * SinRot;
+    Result.E[1][0] = ooS * SinRot;
+    Result.E[1][1] = ooS * CosRot;
+    Result.E[3][0] = -Offset.X * CosRot * ooS - Offset.Y * SinRot * ooS - T.X;
+    Result.E[3][1] = Offset.X * SinRot * ooS - Offset.Y * CosRot * ooS - T.Y;
+ 
+    return Result;
+}
+
+inline mat4
+Mat4GetCamera2DViewInvRel(f32 S, f32 Rot)
+{
+    /*
+     * This is this but hardcoded:
+       mat4 RotationInv = Mat4(Mat3GetRotationAroundAxis(Vec3(0,0,1), ToRadiansF(-Rot)));
+       mat4 ScaleInv = Mat4GetScale(Vec3(1.0f/S, 1.0f.S, 1.0f));
+       mat4 CalcInv = ScaleInv * RotationInv;
+    */
+
+    mat4 Result = Mat4(1.0f);
+    f32 CosRot = CosF(ToRadiansF(Rot));
+    f32 SinRot = SinF(ToRadiansF(Rot));
+    f32 ooS = 1.0f / S;
+    
+    Result.E[0][0] = ooS * CosRot;
+    Result.E[0][1] = -ooS * SinRot;
+    Result.E[1][0] = ooS * SinRot;
+    Result.E[1][1] = ooS * CosRot;
+ 
     return Result;
 }
 
