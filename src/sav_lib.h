@@ -20,13 +20,6 @@ struct game_memory
     size_t Size;
 };
 
-
-struct mouse_pos
-{
-    int X;
-    int Y;
-};
-
 struct window_size
 {
     int Width;
@@ -124,6 +117,7 @@ SAV_API void Quit();
 SAV_API void SetWindowTitle(const char *Title);
 SAV_API window_size GetWindowSize();
 SAV_API void SetWindowBorderless(b32 Borderless);
+SAV_API void ToggleWindowBorderless();
 
 SAV_API b32 KeyDown(int Key);
 SAV_API b32 KeyPressed(int Key);
@@ -132,8 +126,8 @@ SAV_API b32 KeyRepeat(int Key);
 SAV_API b32 KeyPressedOrRepeat(int Key);
 SAV_API b32 GetMouseRelativeMode();
 SAV_API void SetMouseRelativeMode(b32 Enabled);
-SAV_API mouse_pos GetMousePos();
-SAV_API mouse_pos GetMouseRelPos();
+SAV_API vec2 GetMousePos();
+SAV_API vec2 GetMouseRelPos();
 SAV_API b32 MouseDown(int Button);
 SAV_API b32 MousePressed(int Button);
 SAV_API b32 MouseReleased(int Button);

@@ -8,7 +8,8 @@ struct sdl_state
     SDL_Window *Window;
 
     window_size WindowSize;
-    
+
+    b32 Borderless;
     i32 WidthBeforeBorderless;
     i32 HeightBeforeBorderless;
     i32 XBeforeBorderless;
@@ -36,8 +37,8 @@ struct input_state
     u8 PreviousKeyStates[SDL_NUM_SCANCODES];
     u8 RepeatKeyStates[SDL_NUM_SCANCODES];
 
-    mouse_pos MousePos;
-    mouse_pos MouseRelPos;
+    vec2 MousePos;
+    vec2 MouseRelPos;
 
     b32 IsRelMouse;
 

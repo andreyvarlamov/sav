@@ -400,21 +400,21 @@ PollEvents(b32 *Quit)
             {
                 *Quit = true;
             } break;
+
             case SDL_KEYDOWN:
             case SDL_KEYUP:
             {
                 InputState->CurrentKeyStates[Event.key.keysym.scancode] = (Event.type == SDL_KEYDOWN);
                 InputState->RepeatKeyStates[Event.key.keysym.scancode] = Event.key.repeat;
             } break;
+
             case SDL_MOUSEMOTION:
             {
-                // TraceLog("SDL_MOUSEMOTION: Abs(%d, %d); Rel(%d, %d)", Event.motion.x, Event.motion.y, Event.motion.xrel, Event.motion.yrel);
                 // NOTE: It seems it's better to update mouse position every frame
             } break;
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
             {
-                // TraceLog("%s: %d, %d, %d", Event.type == SDL_MOUSEBUTTONDOWN ? "SDL_MOUSEBUTTONDOWN" : "SDL_MOUSEBUTTONUP", Event.button.button, Event.button.state, Event.button.clicks);
                 InputState->CurrentMouseButtonStates[Event.button.button] = (Event.type == SDL_MOUSEBUTTONDOWN);
                 if (Event.type == SDL_MOUSEBUTTONDOWN)
                 {
@@ -424,25 +424,26 @@ PollEvents(b32 *Quit)
             case SDL_MOUSEWHEEL:
             {
                 // TODO: Maybe deal with Event.wheel.direction field on other platforms
-                // TraceLog("SDL_MOUSE_WHELL: %d, %d; %f, %f", Event.wheel.x, Event.wheel.y, Event.wheel.preciseX, Event.wheel.preciseY);
                 InputState->MouseWheel += Event.wheel.y; // NOTE: Add y, because it's likely there were more than one Event between frames
             } break;
+
             case SDL_WINDOWEVENT:
             {
                 if (Event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
                     SdlState->WindowSize.Width = Event.window.data1;
                     SdlState->WindowSize.Height = Event.window.data2;
-                    // TraceLog("Window resized: %d x %d\n", SdlState->WindowSize.Width, SdlState->WindowSize.Height);
                 }
             } break;
             default: break;
         }
     }
 
-    SDL_GetMouseState(&InputState->MousePos.X, &InputState->MousePos.Y);
-    SDL_GetRelativeMouseState(&InputState->MouseRelPos.X, &InputState->MouseRelPos.Y);
-    // TraceLog("Updated mouse: Abs(%d, %d); Rel(%d, %d)", InputState->MousePos.X, InputState->MousePos.Y, InputState->MouseRelPos.X, InputState->MouseRelPos.Y);
+    int MouseX, MouseY, MouseRelX, MouseRelY;
+    SDL_GetMouseState(&MouseX, &MouseY);
+    SDL_GetRelativeMouseState(&MouseRelX, &MouseRelY);
+    InputState->MousePos = Vec2((f32) MouseX, (f32) MouseY);
+    InputState->MouseRelPos = Vec2((f32) MouseRelX, (f32) MouseRelY);
 }
 
 void
@@ -515,6 +516,14 @@ SetWindowBorderless(b32 Borderless)
     }
 }
 
+void
+ToggleWindowBorderless()
+{
+    sdl_state *SdlState = &gSdlState;
+    SdlState->Borderless = !SdlState->Borderless;
+    SetWindowBorderless(SdlState->Borderless);
+}
+
 //
 // NOTE: Input helpers
 //
@@ -549,11 +558,11 @@ void SetMouseRelativeMode(b32 Enabled)
     gInputState.IsRelMouse = Enabled;
     SDL_SetRelativeMouseMode((SDL_bool) gInputState.IsRelMouse);
 }
-mouse_pos GetMousePos()
+vec2 GetMousePos()
 {
     return gInputState.MousePos;
 }
-mouse_pos GetMouseRelPos()
+vec2 GetMouseRelPos()
 {
     return gInputState.MouseRelPos;
 }
