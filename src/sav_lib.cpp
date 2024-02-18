@@ -557,6 +557,19 @@ mouse_pos GetMouseRelPos()
 {
     return gInputState.MouseRelPos;
 }
+vec2 GetMouseLogicalPos()
+{
+    vec2 P = Vec2((f32) gInputState.MousePos.X, (f32) gInputState.MousePos.Y);
+    gl_state *GlState = &gGlState;
+    if (GlState->RenderTextureActive)
+    {
+        P = ScreenToRectCoords(GlState->CurrentRenderTextureScreenRect,
+                               (f32) GlState->CurrentRenderTexture.Texture.Width,
+                               (f32) GlState->CurrentRenderTexture.Texture.Height,
+                               P);
+    }
+    return P;
+}
 b32 MouseDown(int Button)
 {
     return (b32) gInputState.CurrentMouseButtonStates[Button];
@@ -779,11 +792,11 @@ BeginDraw()
 {
     sdl_state *SdlState = &gSdlState;
     glViewport(0, 0, SdlState->WindowSize.Width, SdlState->WindowSize.Height);
-
     SetProjectionMatrix(Mat4GetOrthographicProjection(0.0f,
                                                       (f32) SdlState->WindowSize.Width,
                                                       (f32) SdlState->WindowSize.Height,
                                                       0.0f, -1.0f, 1.0f));
+    gGlState.RenderTextureActive = false;
 }
 
 void
@@ -1295,22 +1308,25 @@ SavLoadRenderTexture(int Width, int Height, b32 FilterNearest)
 }
 
 void
-BeginTextureMode(sav_render_texture RenderTexture)
+BeginTextureMode(sav_render_texture RenderTexture, rect RenderTextureScreenRect)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, RenderTexture.FBO);
-
     glViewport(0, 0, RenderTexture.Texture.Width, RenderTexture.Texture.Height);
-
     SetProjectionMatrix(Mat4GetOrthographicProjection(0.0f,
                                                       (f32) RenderTexture.Texture.Width,
                                                       (f32) RenderTexture.Texture.Height,
                                                       0.0f, -1.0f, 1.0f));
+    gl_state *GlState = &gGlState;
+    GlState->RenderTextureActive = true;
+    GlState->CurrentRenderTextureScreenRect = RenderTextureScreenRect;
+    GlState->CurrentRenderTexture = RenderTexture;
 }
 
 void
 EndTextureMode()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gGlState.RenderTextureActive = false;
 }
 
 //
@@ -1634,6 +1650,40 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
     glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 
     MemoryArena_Unfreeze(TransientArena);
+}
+
+//
+// NOTE: GUI Collisions
+//
+b32
+CheckPointInRect(vec2 P, rect R)
+{
+    vec2 MinR = RectGetMin(R);
+    vec2 MaxR = RectGetMax(R);
+    return (P.X > MinR.X && P.Y > MinR.Y && P.X < MaxR.X && P.Y < MaxR.Y);
+}
+
+//
+// NOTE: GUI
+//
+b32
+GuiButtonRect(rect R)
+{
+    vec2 MouseP = GetMouseLogicalPos();
+
+    b32 MouseInRect = CheckPointInRect(MouseP, R);
+    if (MouseInRect)
+    {
+        color C = ColorAlpha(VA_BLACK, 128);
+        if (MouseDown(SDL_BUTTON_LEFT))
+        {
+            C = ColorAlpha(VA_BLACK, 200);
+        }
+        DrawRect(R, C);
+        return MouseReleased(SDL_BUTTON_LEFT);
+    }
+
+    return false;
 }
 
 //

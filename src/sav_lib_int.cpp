@@ -75,6 +75,10 @@ struct gl_state
 
     mat4 Projection;
     mat4 ModelView;
+
+    b32 RenderTextureActive;
+    rect CurrentRenderTextureScreenRect;
+    sav_render_texture CurrentRenderTexture;
 };
 
 static_g sdl_state gSdlState;

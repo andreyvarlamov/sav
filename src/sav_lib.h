@@ -188,11 +188,13 @@ SAV_API sav_texture SavLoadTexture(const char *Path);
 SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
 SAV_API sav_texture SavLoadTextureFromData(void *ImageData, int Width, int Height);
 SAV_API sav_render_texture SavLoadRenderTexture(int Width, int Height, b32 FilterNearest);
-SAV_API void BeginTextureMode(sav_render_texture RenderTexture);
+SAV_API void BeginTextureMode(sav_render_texture RenderTexture, rect RenderTextureScreenRect);
 SAV_API void EndTextureMode();
 
 SAV_API sav_font *SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize);
 SAV_API void DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, color Color, b32 DrawBg, color BgColor, memory_arena *TransientArena);
+
+SAV_API b32 GuiButtonRect(rect R);
 
 SAV_API const char *TextFormat(const char *Format, ...);
 SAV_API void TraceLog(const char *Format, ...);
@@ -201,9 +203,9 @@ SAV_API void TraceLog(const char *Format, ...);
 // NOTE: QOL inline overloads
 //
 inline void
-DrawTexture(sav_texture Texture, rect Dest)
+DrawTexture(sav_texture Texture, rect Dest, color Color)
 {
-    DrawTexture(Texture, Dest, Rect(Texture.Width, Texture.Height), Vec2(), 0.0f, VA_WHITE);
+    DrawTexture(Texture, Dest, Rect(Texture.Width, Texture.Height), Vec2(), 0.0f, Color);
 }
 
 inline void
@@ -223,6 +225,12 @@ GetWindowRect()
     window_size Size = GetWindowSize();
     rect Result = Rect((f32) Size.Width, (f32) Size.Height);
     return Result;
+}
+
+inline rect
+GetTextureRect(int X, int Y, sav_texture Texture)
+{
+    return Rect(X, Y, Texture.Width, Texture.Height);
 }
 
 #endif

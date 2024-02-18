@@ -70,14 +70,14 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
 
         GameState->uiRect = GetWindowRect();
-        GameState->uiRect.X = 100;
-        GameState->uiRect.Y = 100;
-        GameState->uiRect.Width = 1500;
-        GameState->uiRect.Height = 750;
-        GameState->RTexUI = SavLoadRenderTexture(1000, 500, false);
-        GameState->RTexPxUI = SavLoadRenderTexture(1000, 500, true);
-        // GameState->RTexUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, false);
-        // GameState->RTexPxUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, true);
+        // GameState->uiRect.X = 100;
+        // GameState->uiRect.Y = 100;
+        // GameState->uiRect.Width = 1500;
+        // GameState->uiRect.Height = 750;
+        // GameState->RTexUI = SavLoadRenderTexture(1000, 500, false);
+        // GameState->RTexPxUI = SavLoadRenderTexture(1000, 500, true);
+        GameState->RTexUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, false);
+        GameState->RTexPxUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, true);
         
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
         // GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
@@ -87,6 +87,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     MemoryArena_Reset(&GameState->TransientArena);
 
+    // TODO: Need some generic way to link stuff to screen coords, without having to update separately every frame
+    GameState->uiRect.Width = (f32) GetWindowSize().Width;
+    GameState->uiRect.Height = (f32) GetWindowSize().Height;
     GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
 
     if (KeyPressed(SDL_SCANCODE_F11))
@@ -212,9 +215,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     color WatermarkColor = LerpColor(VA_MAROON, VA_ORANGERED, ColorPos);
 
-    BeginTextureMode(GameState->RTexUI);
+    BeginTextureMode(GameState->RTexUI, GameState->uiRect);
     {
-        ClearBackground(ColorAlpha(VA_WHITE, 255));
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
 
         DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
                    GameState->Font,
@@ -227,11 +230,18 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
     EndTextureMode();
 
-    BeginTextureMode(GameState->RTexPxUI);
+    static b32 ShowTree = true;
+    
+    BeginTextureMode(GameState->RTexPxUI, GameState->uiRect);
     {
         ClearBackground(ColorAlpha(VA_WHITE, 0));
 
-        // DrawTexture(GameState->Texture, 1780, 990, 0.15f, WatermarkColor);
+        rect ButtonRect = RectScale(GetTextureRect(1780, 990, GameState->Texture), 0.15f);
+        if (GuiButtonRect(ButtonRect))
+        {
+            ShowTree = !ShowTree;
+        }
+        DrawTexture(GameState->Texture, ButtonRect, WatermarkColor);
     }
     EndTextureMode();
     
@@ -243,17 +253,20 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         {
             DrawRect(Rect(0, 0, 1600, 500), VA_AQUAMARINE);
 
-            DrawTexture(GameState->Texture,
-                        Rect(0.0f, 0.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
-                        Rect(GameState->Texture.Width, GameState->Texture.Height),
-                        Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
-                        0.0f,
-                        VA_DARKGREEN);
+            if (ShowTree)
+            {
+                DrawTexture(GameState->Texture,
+                            Rect(0.0f, 0.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
+                            Rect(GameState->Texture.Width, GameState->Texture.Height),
+                            Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
+                            0.0f,
+                            VA_DARKGREEN);
+            }
         }
         EndCameraMode();
 
-        DrawTexture(GameState->RTexUI.Texture, GameState->uiRect);
-        DrawTexture(GameState->RTexPxUI.Texture, GameState->uiRect);
+        DrawTexture(GameState->RTexUI.Texture, GameState->uiRect, VA_WHITE);
+        DrawTexture(GameState->RTexPxUI.Texture, GameState->uiRect, VA_WHITE);
     }
     EndDraw();
     

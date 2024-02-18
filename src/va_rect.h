@@ -35,6 +35,14 @@ Rect(f32 Dim)
 }
 
 inline rect
+RectScale(rect R, f32 Scale)
+{
+    R.Width *= Scale;
+    R.Height *= Scale;
+    return R;
+}
+
+inline rect
 Rect(i32 X, i32 Y, i32 Width, i32 Height)
 {
     return Rect((f32) X, (f32) Y, (f32) Width, (f32) Height);
