@@ -102,6 +102,14 @@ struct sav_font
     int Height;
 };
 
+struct sav_render_texture
+{
+    u32 FBO;
+    u32 DepthRBO;
+
+    sav_texture Texture;
+};
+
 SAV_API game_memory AllocGameMemory(size_t Size);
 SAV_API void DumpGameMemory(game_memory GameMemory);
 SAV_API void ReloadGameMemoryDump(game_memory GameMemory);
@@ -149,36 +157,72 @@ SAV_API void FreeSoundChunk(sound_chunk Chunk);
 
 SAV_API u32 BuildBasicShader();
 
+SAV_API void ClearBackground(color Color);
 SAV_API void BeginDraw();
 SAV_API void EndDraw();
 SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertexCount, int MaxIndexCount);
 SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
                           vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
                           int VertexCount, int MaxVertexCount, int IndexCount);
-SAV_API void DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, vec4 Color);
-SAV_API void DrawRect(rect Rect, vec4 Color);
+SAV_API void DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, color Color);
+SAV_API void DrawRect(rect Rect, color Color);
 
 SAV_API void BeginCameraMode(camera_2d *Camera);
 SAV_API void EndCameraMode();
+SAV_API void SetProjectionMatrix(mat4 Projection);
+SAV_API void SetModelViewMatrix(mat4 ModelView);
 SAV_API void SetOrthographicProjectionMatrix(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near, f32 Far);
 SAV_API vec2 CameraWorldToScreen(camera_2d *Camera, vec2 World);
 SAV_API vec2 CameraScreenToWorld(camera_2d *Camera, vec2 Screen);
 SAV_API vec2 CameraScreenToWorldRel(camera_2d *Camera, vec2 Screen);
+SAV_API vec2 ScreenToRectCoords(rect ScreenR, f32 ScaledW, f32 ScaledH, vec2 ScreenCoords);
+SAV_API vec2 RectToScreenCoords(rect ScreenR, f32 ScaledW, f32 ScaledH, vec2 RectCoords);
 SAV_API void CameraIncreaseLogZoom(camera_2d *Camera, f32 Delta);
 SAV_API void CameraInitLogZoomSteps(camera_2d *Camera, f32 Min, f32 Max, int StepCount);
 SAV_API void CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps);
 
 SAV_API sav_image SavLoadImage(const char *Path);
 SAV_API void SavFreeImage(sav_image *Image);
-SAV_API void SavSaveImage(const char *Path, void *Data, int Width, int Height, b32 Flip, u32 RMask, u32 GMask, u32 BMask, u32 AMask);
+SAV_API void SavSaveImage(const char *Path, void *Data, int Width, int Height, b32 Flip, u32 RMask, u32 GiMask, u32 BMask, u32 AMask);
 SAV_API sav_texture SavLoadTexture(const char *Path);
 SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
-SAV_API sav_texture SavLoadTextureFromData(void *ImageData, u32 Width, u32 Height);
+SAV_API sav_texture SavLoadTextureFromData(void *ImageData, int Width, int Height);
+SAV_API sav_render_texture SavLoadRenderTexture(int Width, int Height, b32 FilterNearest);
+SAV_API void BeginTextureMode(sav_render_texture RenderTexture);
+SAV_API void EndTextureMode();
 
 SAV_API sav_font *SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize);
 SAV_API void DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, color Color, b32 DrawBg, color BgColor, memory_arena *TransientArena);
 
 SAV_API const char *TextFormat(const char *Format, ...);
 SAV_API void TraceLog(const char *Format, ...);
+
+//
+// NOTE: QOL inline overloads
+//
+inline void
+DrawTexture(sav_texture Texture, rect Dest)
+{
+    DrawTexture(Texture, Dest, Rect(Texture.Width, Texture.Height), Vec2(), 0.0f, VA_WHITE);
+}
+
+inline void
+DrawTexture(sav_texture Texture, f32 X, f32 Y, f32 Scale, color Color)
+{
+    DrawTexture(Texture,
+                Rect(X, Y, Texture.Width * Scale, Texture.Height * Scale),
+                Rect(Texture.Width, Texture.Height),
+                Vec2(),
+                0.0f,
+                Color);
+}
+
+inline rect
+GetWindowRect()
+{
+    window_size Size = GetWindowSize();
+    rect Result = Rect((f32) Size.Width, (f32) Size.Height);
+    return Result;
+}
 
 #endif

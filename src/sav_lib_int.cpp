@@ -74,6 +74,7 @@ struct gl_state
     u32 DefaultTextureGlid;
 
     mat4 Projection;
+    mat4 ModelView;
 };
 
 static_g sdl_state gSdlState;

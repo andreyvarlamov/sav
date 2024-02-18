@@ -427,132 +427,46 @@ union vec4
     f32 E[4];
 };
 
+inline vec4 Vec4() { vec4 Result = {}; return Result; }
+inline vec4 Vec4(f32 X, f32 Y, f32 Z, f32 W) { vec4 Result = {}; Result.X = X; Result.Y = Y; Result.Z = Z; Result.W = W; return Result; }
+inline vec4 Vec4(vec3 V, f32 W) { return Vec4(V.X, V.Y, V.Z, W); }
+inline vec4 Vec4(vec3 V) { return Vec4(V, 0.0f); }
+inline vec4 Vec4(vec2 V, f32 Z, f32 W) { return Vec4(V.X, V.Y, Z, W); }
+inline vec3 Vec3(vec4 V) { return Vec3(V.X, V.Y, V.Z);}
+inline vec2 Vec2(vec4 V) { return Vec2(Vec3(V)); }
+inline vec4 operator+(vec4 V0, vec4 V1) { return Vec4(V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z, V0.W + V1.W); }
+inline vec4 operator-(vec4 V0) { return Vec4(-V0.X, -V0.Y, -V0.Z, -V0.W); }
+inline vec4 operator-(vec4 V0, vec4 V1) { return V0 + (-V1); }
+inline vec4 operator*(vec4 V, f32 S) { return Vec4(V.X * S, V.Y * S, V.Z * S, V.W * S); }
+inline vec4 operator*(f32 S, vec4 V) { return V * S; }
+inline vec4 operator/(vec4 V, f32 S);
+inline vec4 &operator+=(vec4 &V0, vec4 V1);
+inline vec4 &operator-=(vec4 &V0, vec4 V1);
+inline vec4 &operator*=(vec4 &V, f32 S);
+inline vec4 &operator/=(vec4 &V, f32 S);
+
 inline vec4
-Vec4()
+Vec4Lerp(vec4 A, vec4 B, f32 LerpFactor)
 {
-    vec4 Result = {};
-    return Result;
+    return A + LerpFactor * (B - A);
 }
-
-inline vec4
-Vec4(f32 X, f32 Y, f32 Z, f32 W)
-{
-    vec4 Result = {};
-
-    Result.X = X;
-    Result.Y = Y;
-    Result.Z = Z;
-    Result.W = W;
-
-    return Result;
-}
-
-inline vec4
-Vec4(vec3 V, f32 W)
-{
-    vec4 Result = Vec4(V.X, V.Y, V.Z, W);
-    return Result;
-}
-
-inline vec4
-Vec4(vec3 V)
-{
-    vec4 Result = Vec4(V, 0.0f);
-    return Result;
-}
-
-inline vec4
-Vec4(vec2 V, f32 Z, f32 W)
-{
-    vec4 Result = Vec4(V.X, V.Y, Z, W);
-    return Result;
-}
-
-inline vec3
-Vec3(vec4 V)
-{
-    vec3 Result = Vec3(V.X, V.Y, V.Z);
-    return Result;
-}
-
-inline vec2
-Vec2(vec4 V)
-{
-    vec2 Result = Vec2(Vec3(V));
-    return Result;
-}
-
-inline vec4
-operator+(vec4 V0, vec4 V1);
-
-inline vec4
-operator-(vec4 V0, vec4 V1);
-
-inline vec4
-operator-(vec4 V0);
-
-inline vec4
-operator*(vec4 V, f32 S);
-
-inline vec4
-operator*(f32 S, vec4 V);
-
-inline vec4
-operator/(vec4 V, f32 S);
-
-inline vec4 &
-operator+=(vec4 &V0, vec4 V1);
-
-inline vec4 &
-operator-=(vec4 &V0, vec4 V1);
-
-inline vec4 &
-operator*=(vec4 &V, f32 S);
-
-inline vec4 &
-operator/=(vec4 &V, f32 S);
 
 // NOTE: V4-Color helpers
+inline color Color(vec4 ColorV) { color Color; Color.R = (u8) (ColorV.R * 255); Color.G = (u8) (ColorV.G * 255); Color.B = (u8) (ColorV.B * 255); Color.A = (u8) (ColorV.A * 255); return Color; }
+inline vec4 ColorV4(color Color) { vec4 ColorV; ColorV.R = Color.R / 255.0f; ColorV.G = Color.G / 255.0f; ColorV.B = Color.B / 255.0f; ColorV.A = Color.A / 255.0f; return ColorV; }
+inline vec4 ColorV4(u8 R, u8 G, u8 B, u8 A) { return ColorV4(Color(R, G, B, A)); }
+inline vec4 ColorV4(u8 R, u8 G, u8 B) { return ColorV4(Color(R, G, B)); }
+inline vec4 ColorV4(u32 Color32) { return ColorV4(Color(Color32)); }
 
 inline color
-Color(vec4 ColorV)
+LerpColor(color A, color B, f32 T)
 {
-    color Color;
-    Color.R = (u8) ColorV.R * 255;
-    Color.G = (u8) ColorV.G * 255;
-    Color.B = (u8) ColorV.B * 255;
-    Color.A = (u8) ColorV.A * 255;
-    return Color;
-}
+    vec4 VA = ColorV4(A);
+    vec4 VB = ColorV4(B);
+    
+    vec4 VResult = Vec4Lerp(VA, VB, T);
 
-inline vec4
-ColorV4(color Color)
-{
-    vec4 ColorV;
-    ColorV.R = Color.R / 255.0f;
-    ColorV.G = Color.G / 255.0f;
-    ColorV.B = Color.B / 255.0f;
-    ColorV.A = Color.A / 255.0f;
-    return ColorV;
-}
-
-
-inline vec4
-ColorV4(u8 R, u8 G, u8 B, u8 A)
-{
-    return ColorV4(Color(R, G, B, A));
-}
-
-inline vec4
-ColorV4(u8 R, u8 G, u8 B)
-{
-    return ColorV4(Color(R, G, B));
-}
-
-inline vec4
-ColorV4(u32 Color32)
-{
-    return ColorV4(Color(Color32));
+    return Color(VResult);
 }
 
 // -------------------------------------------------------------------------------

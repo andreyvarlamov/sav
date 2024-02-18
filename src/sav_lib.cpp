@@ -137,6 +137,12 @@ GetAvgDelta(f64 *Samples, int SampleCount)
     return Accum / TIMING_STAT_AVG_COUNT;
 }
 
+inline void
+UseProgram(u32 ShaderID)
+{
+    glUseProgram(ShaderID);
+}
+
 //
 // ------------------------
 // NOTE: External functions
@@ -260,29 +266,32 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        SdlState->WindowSize.OriginalWidth = SdlState->WindowSize.Width = WindowWidth;
-        SdlState->WindowSize.OriginalHeight = SdlState->WindowSize.Height = WindowHeight;
         SdlState->Window = SDL_CreateWindow(WindowName,
                                             3160, 40,
-                                            SdlState->WindowSize.Width, SdlState->WindowSize.Height,
+                                            WindowWidth, WindowHeight,
                                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-
-        int SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
-        int IMGInitResult = IMG_Init(SDLImageFlags);
-        if (!(IMGInitResult & SDLImageFlags))
-        {
-            printf("SDL failed to init SDL_image\n");
-            return false;
-        }
-
-        if (TTF_Init() != 0)
-        {
-            printf("SDL failed to init SDL_ttf\n");
-            return false;
-        }
 
         if (SdlState->Window)
         {
+            int SDLImageFlags = IMG_INIT_JPG | IMG_INIT_PNG;
+            int IMGInitResult = IMG_Init(SDLImageFlags);
+            if (!(IMGInitResult & SDLImageFlags))
+            {
+                printf("SDL failed to init SDL_image\n");
+                return false;
+            }
+
+            if (TTF_Init() != 0)
+            {
+                printf("SDL failed to init SDL_ttf\n");
+                return false;
+            }
+
+            int ActualWidth, ActualHeight;
+            SDL_GetWindowSize(SdlState->Window, &ActualWidth, &ActualHeight);
+            SdlState->WindowSize.OriginalWidth = SdlState->WindowSize.Width = ActualWidth;
+            SdlState->WindowSize.OriginalHeight = SdlState->WindowSize.Height = ActualHeight;
+            
             SDL_GLContext GlContext = SDL_GL_CreateContext(SdlState->Window);
 
             if (GlContext)
@@ -292,10 +301,6 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 printf("Vendor: %s\n", glGetString(GL_VENDOR));
                 printf("Renderer: %s\n", glGetString(GL_RENDERER));
                 printf("Version: %s\n", glGetString(GL_VERSION));
-
-                int ScreenWidth, ScreenHeight;
-                SDL_GetWindowSize(SdlState->Window, &ScreenWidth, &ScreenHeight);
-                glViewport(0, 0, ScreenWidth, ScreenHeight);
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
 
@@ -317,7 +322,9 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 GlState->MaxIndexCount = 16384;
                 PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO, GlState->MaxVertexCount, GlState->MaxIndexCount);
 
-                GlState->Projection = Mat4GetOrthographicProjection(0.0f, (f32) ScreenWidth, (f32) ScreenHeight, 0.0f, -1.0f, 1.0f);
+                UseProgram(GlState->ShaderProgram);
+                SetProjectionMatrix(Mat4(1.0f));
+                SetModelViewMatrix(Mat4(1.0f));
             }
             else
             {
@@ -426,9 +433,6 @@ PollEvents(b32 *Quit)
                 {
                     SdlState->WindowSize.Width = Event.window.data1;
                     SdlState->WindowSize.Height = Event.window.data2;
-                    glViewport(0, 0, SdlState->WindowSize.Width, SdlState->WindowSize.Height);
-                    gGlState.Projection = Mat4GetOrthographicProjection(0.0f, (f32) SdlState->WindowSize.Width, (f32) SdlState->WindowSize.Height, 0.0f, -1.0f, 1.0f);
-                    // TODO: Update projection matrices
                     // TraceLog("Window resized: %d x %d\n", SdlState->WindowSize.Width, SdlState->WindowSize.Height);
                 }
             } break;
@@ -511,7 +515,6 @@ SetWindowBorderless(b32 Borderless)
     }
 }
 
-
 //
 // NOTE: Input helpers
 //
@@ -536,6 +539,7 @@ b32 KeyPressedOrRepeat(int Key)
 {
     return (b32) ((gInputState.CurrentKeyStates[Key] && !gInputState.PreviousKeyStates[Key]) || gInputState.RepeatKeyStates[Key]);
 }
+
 b32 GetMouseRelativeMode()
 {
     return (b32) SDL_GetRelativeMouseMode();
@@ -755,12 +759,6 @@ BuildBasicShader()
 }
 
 void
-UseProgram(u32 ShaderID)
-{
-    glUseProgram(ShaderID);
-}
-
-void
 SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
 {
     i32 UniformLocation = glGetUniformLocation(ShaderID, UniformName);
@@ -769,14 +767,23 @@ SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
 }
 
 void
+ClearBackground(color Color)
+{
+    vec4 C = ColorV4(Color);
+    glClearColor(C.R, C.G, C.B, C.A);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
+void
 BeginDraw()
 {
-    glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    sdl_state *SdlState = &gSdlState;
+    glViewport(0, 0, SdlState->WindowSize.Width, SdlState->WindowSize.Height);
 
-    gl_state *GlState = &gGlState;
-    UseProgram(GlState->ShaderProgram);
-    SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+    SetProjectionMatrix(Mat4GetOrthographicProjection(0.0f,
+                                                      (f32) SdlState->WindowSize.Width,
+                                                      (f32) SdlState->WindowSize.Height,
+                                                      0.0f, -1.0f, 1.0f));
 }
 
 void
@@ -890,7 +897,7 @@ RotatePointsAroundOrigin(vec3 *Positions, vec3 Origin, f32 Rotation)
 }
 
 void
-DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, vec4 Color)
+DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, color Color)
 {
     vec3 AbsOrigin = Vec3(Dest.X, Dest.Y, 0.0f);
     
@@ -907,7 +914,8 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
     RectGetPoints(Source, TexCoords);
     NormalizeTexCoords(Texture, TexCoords);
     FlipTexCoords(TexCoords);
-    vec4 Colors[] = { Color, Color, Color, Color };
+    vec4 C = ColorV4(Color);
+    vec4 Colors[] = { C, C, C, C };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
     glActiveTexture(GL_TEXTURE0);
@@ -922,12 +930,13 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
 }
 
 void
-DrawRect(rect Rect, vec4 Color)
+DrawRect(rect Rect, color Color)
 {
     vec3 Positions[4];
     RectGetPoints(Rect, Positions);
     vec2 TexCoords[4] = {};
-    vec4 Colors[] = { Color, Color, Color, Color };
+    vec4 C = ColorV4(Color);
+    vec4 Colors[] = { C, C, C, C };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
     gl_state *GlState = &gGlState;
@@ -939,23 +948,31 @@ DrawRect(rect Rect, vec4 Color)
 void
 BeginCameraMode(camera_2d *Camera)
 {
-    gl_state *GlState = &gGlState;
-    mat4 View = Mat4GetCamera2DView(Camera->Target, Camera->Zoom, Camera->Rotation, Camera->Offset);
-    mat4 MVP = GlState->Projection * View;
-    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
+    SetModelViewMatrix(Mat4GetCamera2DView(Camera->Target, Camera->Zoom, Camera->Rotation, Camera->Offset));
 }
 
 void
 EndCameraMode()
 {
-    gl_state *GlState = &gGlState;
-    SetUniformMat4(GlState->ShaderProgram, "mvp", &GlState->Projection.E[0][0]);
+    SetModelViewMatrix(Mat4(1.0f));
 }
 
 void
-SetOrthographicProjectionMatrix(f32 Left, f32 Right, f32 Bottom, f32 Top, f32 Near, f32 Far)
+SetProjectionMatrix(mat4 Projection)
 {
-    gGlState.Projection = Mat4GetOrthographicProjection(Left, Right, Bottom, Top, Near, Far);
+    gl_state *GlState = &gGlState;
+    GlState->Projection = Projection;
+    mat4 MVP = GlState->Projection * GlState->ModelView;
+    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
+}
+
+void
+SetModelViewMatrix(mat4 ModelView)
+{
+    gl_state *GlState = &gGlState;
+    GlState->ModelView = ModelView;
+    mat4 MVP = GlState->Projection * GlState->ModelView;
+    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
 }
 
 vec2
@@ -980,6 +997,28 @@ CameraScreenToWorldRel(camera_2d *Camera, vec2 Screen)
     mat4 ViewInvRel = Mat4GetCamera2DViewInvRel(Camera->Zoom, Camera->Rotation);
     vec4 Result = ViewInvRel * Vec4(Screen, 0.0f, 1.0f);
     return Vec2(Result);
+}
+
+vec2
+ScreenToRectCoords(rect ScreenR, f32 ScaledW, f32 ScaledH, vec2 ScreenCoords)
+{
+    sdl_state *SdlState = &gSdlState;
+
+    vec2 RectCoords = Vec2(((ScreenCoords.X - ScreenR.X) / ScreenR.Width) * ScaledW,
+                           ((ScreenCoords.Y - ScreenR.Y) / ScreenR.Height) * ScaledH);
+    
+    return RectCoords;
+}
+
+vec2
+RectToScreenCoords(rect ScreenR, f32 ScaledW, f32 ScaledH, vec2 RectCoords)
+{
+    sdl_state *SdlState = &gSdlState;
+
+    vec2 ScreenCoords = Vec2((RectCoords.X / ScaledW) * ScreenR.Width + ScreenR.X,
+                             (RectCoords.Y / ScaledH) * ScreenR.Height + ScreenR.Y);
+    
+    return ScreenCoords;
 }
 
 inline f32
@@ -1135,7 +1174,6 @@ SavFreeImage(sav_image *Image)
     SDL_FreeSurface((SDL_Surface *) Image->_dataToFree);
     Image->Data = 0;
     Image->_dataToFree = 0;
-
 }
 
 void
@@ -1189,7 +1227,7 @@ SavLoadTextureFromImage(sav_image Image)
 }
 
 sav_texture
-SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
+SavLoadTextureFromData(void *Data, int Width, int Height)
 {
     u32 Glid;
     glGenTextures(1, &Glid);
@@ -1211,6 +1249,68 @@ SavLoadTextureFromData(void *Data, u32 Width, u32 Height)
     Texture.Width = Width;
     Texture.Height = Height;
     return Texture;
+}
+
+sav_render_texture
+SavLoadRenderTexture(int Width, int Height, b32 FilterNearest)
+{
+    u32 FBO;
+    u32 Texture;
+    glGenFramebuffers(1, &FBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+
+    glGenTextures(1, &Texture);
+    glBindTexture(GL_TEXTURE_2D, Texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    GLenum FilterType = FilterNearest ? GL_NEAREST : GL_LINEAR;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, FilterType);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, FilterType);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, Texture, 0);
+
+    u32 DepthRBO;
+    glGenRenderbuffers(1, &DepthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, DepthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, Width,  Height);
+
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, DepthRBO);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        TraceLog("GL Framebuffer is not complete.");
+        InvalidCodePath;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    sav_render_texture RenderTexture;
+    RenderTexture.FBO = FBO;
+    RenderTexture.DepthRBO = DepthRBO;
+    RenderTexture.Texture.Glid = Texture;
+    RenderTexture.Texture.Width = Width;
+    RenderTexture.Texture.Height = Height;
+    return RenderTexture;
+}
+
+void
+BeginTextureMode(sav_render_texture RenderTexture)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, RenderTexture.FBO);
+
+    glViewport(0, 0, RenderTexture.Texture.Width, RenderTexture.Texture.Height);
+
+    SetProjectionMatrix(Mat4GetOrthographicProjection(0.0f,
+                                                      (f32) RenderTexture.Texture.Width,
+                                                      (f32) RenderTexture.Texture.Height,
+                                                      0.0f, -1.0f, 1.0f));
+}
+
+void
+EndTextureMode()
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 //

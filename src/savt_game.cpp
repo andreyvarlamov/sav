@@ -32,11 +32,15 @@ struct game_state
     camera_2d Camera;
 
     sav_font *Font;
+
+    rect uiRect;
+    sav_render_texture RTexUI;
+    sav_render_texture RTexPxUI;
     
     f32 MapGlyphWidth;
     f32 MapGlyphHeight;
 
-
+    
 
 
 
@@ -65,40 +69,25 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->Camera.Rotation = 0.0f;
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
 
+        GameState->uiRect = GetWindowRect();
+        GameState->uiRect.X = 100;
+        GameState->uiRect.Y = 100;
+        GameState->uiRect.Width = 1500;
+        GameState->uiRect.Height = 750;
+        GameState->RTexUI = SavLoadRenderTexture(1000, 500, false);
+        GameState->RTexPxUI = SavLoadRenderTexture(1000, 500, true);
+        // GameState->RTexUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, false);
+        // GameState->RTexPxUI = SavLoadRenderTexture(GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, true);
+        
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
         // GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 32);
 
-        glGenFramebuffers(1, &GameState->FBO);
-        glBindFramebuffer(GL_FRAMEBUFFER, GameState->FBO);
-
-        glGenTextures(1, &GameState->RenderTexture);
-        glBindTexture(GL_TEXTURE_2D, GameState->RenderTexture);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, GameState->RenderTexture, 0);
-
-        u32 RBO;
-        glGenRenderbuffers(1, &RBO);
-        glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, GetWindowSize().OriginalWidth,  GetWindowSize().OriginalHeight);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        {
-            TraceLog("GL Framebuffer is not complete.");
-        }
-        glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        
         GameState->IsInitialized = true;
     }
 
     MemoryArena_Reset(&GameState->TransientArena);
 
-    GameState->Camera.Offset = Vec2(GetWindowSize().OriginalWidth / 2.0f, GetWindowSize().OriginalHeight / 2.0f);
+    GameState->Camera.Offset = Vec2(GetWindowSize().Width / 2.0f, GetWindowSize().Height / 2.0f);
 
     if (KeyPressed(SDL_SCANCODE_F11))
     {
@@ -106,28 +95,24 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         SetWindowBorderless(GameState->Borderless);
     }
 
-    static_p f32 Rot = 0.0f;
     static_p f32 Scale = 1.0f;
     static_p b32 ScaleIncreasing = true;
 
-    Rot += 30.0f * (f32) GetDeltaPrev();
-    if (Rot >= 360.0f) Rot -= 360.0f;
-
     if (ScaleIncreasing)
     {
-        Scale += 1.0f * (f32) GetDeltaPrev();
-        if (Scale >= 2.0f)
+        Scale += 0.1f * (f32) GetDeltaPrev();
+        if (Scale >= 1.05f)
         {
-            Scale = 2.0f;
+            Scale = 1.05f;
             ScaleIncreasing = false;
         }
     }
     else
     {
-        Scale -= 1.0f * (f32) GetDeltaPrev();
-        if (Scale <= 0.5f)
+        Scale -= 0.1f * (f32) GetDeltaPrev();
+        if (Scale <= 0.99f)
         {
-            Scale = 0.5f;
+            Scale = 0.99f;
             ScaleIncreasing = true;
         }
     }
@@ -157,13 +142,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     f32 MovementSpeed = 1000.0f;
     GameState->Camera.Target += dP * MovementSpeed * (f32) GetDeltaFixed();
 
-#if 0
-    if (GetCurrentFrame() % 50 == 0)
-    {
-        TraceLog("%f, %f", GameState->Camera.Target.X, GameState->Camera.Target.Y);
-    }
-#endif
-
     f32 RotSpeed = 100.0f;
     if (KeyDown(SDL_SCANCODE_RIGHT))
     {
@@ -180,19 +158,25 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         TraceLog("Changed zoom to: %f", GameState->Camera.Zoom);
     }
 
-    if(MousePressed(1))
+    if(MousePressed(SDL_BUTTON_LEFT))
     {
-        vec2 SMouseP = Vec2((f32) GetMousePos().X, (f32) GetMousePos().Y);
-        vec2 WMouseP = CameraScreenToWorld(&GameState->Camera, SMouseP);
-        vec2 B2SMouseP = CameraWorldToScreen(&GameState->Camera, WMouseP);
+        vec2 ScreenCoords = Vec2((f32) GetMousePos().X, (f32) GetMousePos().Y);
+        vec2 RectCoords = ScreenToRectCoords(GameState->uiRect,
+                                             (f32) GameState->RTexUI.Texture.Width,
+                                             (f32) GameState->RTexUI.Texture.Height,
+                                             ScreenCoords);
+        vec2 B2SCoords = RectToScreenCoords(GameState->uiRect,
+                                            (f32) GameState->RTexUI.Texture.Width,
+                                            (f32) GameState->RTexUI.Texture.Height,
+                                            RectCoords);
         
-        TraceLog("SMouseP: (%f, %f); WMouseP: (%f, %f); B2SMouseP: (%f, %f)",
-                 SMouseP.X, SMouseP.Y,
-                 WMouseP.X, WMouseP.Y,
-                 B2SMouseP.X, B2SMouseP.Y);
+        TraceLog("ScreenCoords: (%f, %f); RectCoords: (%f, %f); B2SCoords: (%f, %f)",
+                 ScreenCoords.X, ScreenCoords.Y,
+                 RectCoords.X, RectCoords.Y,
+                 B2SCoords.X, B2SCoords.Y);
     }
 
-    if (MouseDown(2))
+    if (MouseDown(SDL_BUTTON_MIDDLE))
     {
         vec2 SMouseRelP = Vec2((f32) GetMouseRelPos().X, (f32) GetMouseRelPos().Y);
 
@@ -203,39 +187,34 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         TraceLog("%f, %f", GameState->Camera.Target.X, GameState->Camera.Target.Y);
     }
 
-    BeginDraw();
+    static f32 ColorPos = 0.0f;
+    static b32 ColorIncreasing = true;
+    f32 ColorSpeed = 0.5f;
+
+    if (ColorIncreasing)
     {
-        glBindFramebuffer(GL_FRAMEBUFFER, GameState->FBO);
-
-        if (KeyPressed(SDL_SCANCODE_F10))
+        ColorPos += ColorSpeed * (f32) GetDeltaFixed();
+        if (ColorPos >= 1.0f)
         {
-            int Width = GetWindowSize().OriginalWidth;
-            int Height = GetWindowSize().OriginalHeight;
-            void *PixelData = (void *) MemoryArena_PushArray(&GameState->TransientArena, Width*Height, u8); 
-            glReadPixels(0, 0, Width, Height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, PixelData);
-            SavSaveImage("temp/screen.png", PixelData, Width, Height, true,
-                         0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+            ColorPos = 1.0f;
+            ColorIncreasing = false;
         }
-        
-        glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glViewport(0, 0, GetWindowSize().OriginalWidth, GetWindowSize().OriginalHeight);
-        SetOrthographicProjectionMatrix(0.0f, (f32) GetWindowSize().OriginalWidth, (f32) GetWindowSize().OriginalHeight, 0.0f, -1.0f, 1.0f);
-
-        // glEnable(GL_DEPTH_TEST);
-        
-        BeginCameraMode(&GameState->Camera);
+    }
+    else
+    {
+        ColorPos -= ColorSpeed * (f32) GetDeltaFixed();
+        if (ColorPos <= 0.0f)
         {
-            DrawRect(Rect(0, 0, 1600, 500), ColorV4(VA_AQUAMARINE));
-
-            DrawTexture(GameState->Texture,
-                        Rect(GetWindowSize().OriginalWidth / 2.0f, GetWindowSize().OriginalHeight / 2.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
-                        Rect(GameState->Texture.Width, GameState->Texture.Height),
-                        Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
-                        Rot,
-                        ColorV4(VA_MAROON));
+            ColorPos = 0.0f;
+            ColorIncreasing = true;
         }
-        EndCameraMode();
+    }
+
+    color WatermarkColor = LerpColor(VA_MAROON, VA_ORANGERED, ColorPos);
+
+    BeginTextureMode(GameState->RTexUI);
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 255));
 
         DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
                    GameState->Font,
@@ -243,26 +222,39 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    10,
                    10,
                    VA_MAROON,
-                   true, ColorAlpha(VA_GRAY, 30),
+                   true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TransientArena);
+    }
+    EndTextureMode();
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        // glDisable(GL_DEPTH_TEST);
-        glViewport(0, 0, GetWindowSize().Width, GetWindowSize().Height);
-        SetOrthographicProjectionMatrix(0.0f, (f32) GetWindowSize().Width, (f32) GetWindowSize().Height, 0.0f, -1.0f, 1.0f);
-        EndCameraMode(); // HACK HAHAHA
+    BeginTextureMode(GameState->RTexPxUI);
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
 
-        sav_texture RenderTexture;
-        RenderTexture.Glid = GameState->RenderTexture;
-        RenderTexture.Width = GetWindowSize().OriginalWidth;
-        RenderTexture.Height = GetWindowSize().OriginalHeight;
-        DrawTexture(RenderTexture,
-                    Rect((f32) GetWindowSize().Width, (f32) GetWindowSize().Height),
-                    Rect(RenderTexture.Width, RenderTexture.Height),
-                    Vec2(),
-                    0.0f,
-                    ColorV4(VA_WHITE));
-    } 
+        // DrawTexture(GameState->Texture, 1780, 990, 0.15f, WatermarkColor);
+    }
+    EndTextureMode();
+    
+    BeginDraw();
+    {
+        ClearBackground(VA_GRAY);
+        
+        BeginCameraMode(&GameState->Camera);
+        {
+            DrawRect(Rect(0, 0, 1600, 500), VA_AQUAMARINE);
+
+            DrawTexture(GameState->Texture,
+                        Rect(0.0f, 0.0f, (f32) GameState->Texture.Width * Scale, (f32) GameState->Texture.Height * Scale),
+                        Rect(GameState->Texture.Width, GameState->Texture.Height),
+                        Vec2(GameState->Texture.Width * Scale / 2.0f, GameState->Texture.Height * Scale / 2.0f),
+                        0.0f,
+                        VA_DARKGREEN);
+        }
+        EndCameraMode();
+
+        DrawTexture(GameState->RTexUI.Texture, GameState->uiRect);
+        DrawTexture(GameState->RTexPxUI.Texture, GameState->uiRect);
+    }
     EndDraw();
     
     char Title[256];
