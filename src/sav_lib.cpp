@@ -15,16 +15,15 @@
 #include <sdl2/SDL_ttf.h>
 
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 #define SAV_LIB_INT
 #include "sav_lib_int.cpp"
 
-//
 // ------------------------
-// NOTE: Internal functions
+// SECTION: Internal functions
 // ------------------------
-//
-
 
 static_i void *
 Win32AllocMemory(size_t Size)
@@ -143,15 +142,11 @@ UseProgram(u32 ShaderID)
     glUseProgram(ShaderID);
 }
 
-//
 // ------------------------
-// NOTE: External functions
+// SECTION: External functions
 // ------------------------
-//
 
-//
-// NOTE: Game memory
-//
+// SECTION: Game memory
 game_memory
 AllocGameMemory(size_t Size)
 {
@@ -251,9 +246,7 @@ ReloadGameCode(void **UpdateAndRenderFunc)
     return Reloaded;
 }
 
-//
-// NOTE: Program state/sdl window
-//
+// SECTION: Program state/sdl window
 b32
 InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 {
@@ -289,8 +282,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 
             int ActualWidth, ActualHeight;
             SDL_GetWindowSize(SdlState->Window, &ActualWidth, &ActualHeight);
-            SdlState->WindowSize.OriginalWidth = SdlState->WindowSize.Width = ActualWidth;
-            SdlState->WindowSize.OriginalHeight = SdlState->WindowSize.Height = ActualHeight;
+            SdlState->WindowSize = Vec2((f32) ActualWidth, (f32) ActualHeight);
+            SdlState->WindowOrigSize = SdlState->WindowSize;
             
             SDL_GLContext GlContext = SDL_GL_CreateContext(SdlState->Window);
 
@@ -304,7 +297,7 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
 
-                // NOTE: GL INIT
+                // SECTION: GL INIT
 
                 // TODO: Don't do the following things in this function
                 glEnable(GL_BLEND);
@@ -325,6 +318,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 UseProgram(GlState->ShaderProgram);
                 SetProjectionMatrix(Mat4(1.0f));
                 SetModelViewMatrix(Mat4(1.0f));
+
+                srand((unsigned) time(NULL));
             }
             else
             {
@@ -431,8 +426,7 @@ PollEvents(b32 *Quit)
             {
                 if (Event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
-                    SdlState->WindowSize.Width = Event.window.data1;
-                    SdlState->WindowSize.Height = Event.window.data2;
+                    SdlState->WindowSize = Vec2((f32) Event.window.data1, (f32) Event.window.data2);
                 }
             } break;
             default: break;
@@ -458,25 +452,10 @@ Quit()
     SDL_Quit();
 }
 
-//
-// NOTE: SDL window
-//
-
-void
-SetWindowTitle(const char *title)
-{
-    sdl_state *SdlState = &gSdlState;
-    
-    SDL_SetWindowTitle(SdlState->Window, title);
-}
-
-window_size
-GetWindowSize()
-{
-    sdl_state *SdlState = &gSdlState;
-
-    return SdlState->WindowSize;
-}
+// SECTION: SDL window
+void SetWindowTitle(const char *title) { SDL_SetWindowTitle(gSdlState.Window, title); }
+vec2 GetWindowSize() { return gSdlState.WindowSize; }
+vec2 GetWindowOrigSize() { return gSdlState.WindowOrigSize; }
 
 void
 SetWindowBorderless(b32 Borderless)
@@ -485,13 +464,9 @@ SetWindowBorderless(b32 Borderless)
 
     if (Borderless)
     {
-        SdlState->WidthBeforeBorderless = SdlState->WindowSize.Width;
-        SdlState->HeightBeforeBorderless = SdlState->WindowSize.Height;
-
         int X, Y;
         SDL_GetWindowPosition(SdlState->Window, &X, &Y);
-        SdlState->XBeforeBorderless = X;
-        SdlState->YBeforeBorderless = Y;
+        SdlState->WindowRectBeforeBorderless = Rect((f32) X, (f32) Y, SdlState->WindowSize);
     }
     
     SDL_SetWindowBordered(SdlState->Window, (SDL_bool) !Borderless);
@@ -504,14 +479,12 @@ SetWindowBorderless(b32 Borderless)
     {
         SDL_RestoreWindow(SdlState->Window);
 
-        if (SdlState->WidthBeforeBorderless != 0)
+        // TODO: This is very hacky, maybe there's a better way to do this with SDL
+        if (SdlState->WindowRectBeforeBorderless.Width > 0)
         {
-            SDL_SetWindowSize(SdlState->Window, SdlState->WidthBeforeBorderless, SdlState->HeightBeforeBorderless);
-            SDL_SetWindowPosition(SdlState->Window, SdlState->XBeforeBorderless, SdlState->YBeforeBorderless);
-            SdlState->WidthBeforeBorderless = 0;
-            SdlState->HeightBeforeBorderless = 0;
-            SdlState-> XBeforeBorderless = 0;
-            SdlState->YBeforeBorderless = 0;
+            SDL_SetWindowSize(SdlState->Window, (int) SdlState->WindowRectBeforeBorderless.Width, (int) SdlState->WindowRectBeforeBorderless.Height);
+            SDL_SetWindowPosition(SdlState->Window, (int) SdlState->WindowRectBeforeBorderless.X, (int) SdlState->WindowRectBeforeBorderless.Y);
+            SdlState->WindowRectBeforeBorderless = Rect(0);
         }
     }
 }
@@ -524,10 +497,7 @@ ToggleWindowBorderless()
     SetWindowBorderless(SdlState->Borderless);
 }
 
-//
-// NOTE: Input helpers
-//
-
+// SECTION: Input helpers
 b32 KeyDown(int Key)
 {
     return (b32) gInputState.CurrentKeyStates[Key];
@@ -602,10 +572,7 @@ i32 MouseWheel()
     return gInputState.MouseWheel;
 }
 
-//
-// NOTE: Timing
-//
-
+// SECTION: Timing
 u64 GetCurrentFrame()
 {
     return gCurrentFrame;
@@ -633,10 +600,7 @@ f64 GetFPSAvg()
     else return 0.0;
 }
 
-//
-// NOTE: Audio
-//
-
+// SECTION: Audio
 b32
 InitAudio()
 {
@@ -702,10 +666,7 @@ void FreeSoundChunk(sound_chunk Chunk)
     Mix_FreeChunk((Mix_Chunk *) Chunk.Sound);
 }
 
-//
-// NOTE: Drawing
-//
-
+// SECTION: Drawing
 u32
 BuildBasicShader()
 {
@@ -800,18 +761,21 @@ void
 BeginDraw()
 {
     sdl_state *SdlState = &gSdlState;
-    glViewport(0, 0, SdlState->WindowSize.Width, SdlState->WindowSize.Height);
+    glViewport(0, 0, (int) SdlState->WindowSize.X, (int) SdlState->WindowSize.Y);
     SetProjectionMatrix(Mat4GetOrthographicProjection(0.0f,
-                                                      (f32) SdlState->WindowSize.Width,
-                                                      (f32) SdlState->WindowSize.Height,
+                                                      SdlState->WindowSize.X,
+                                                      SdlState->WindowSize.Y,
                                                       0.0f, -1.0f, 1.0f));
     gGlState.RenderTextureActive = false;
+    gGlState.DrawReady = true;
+
 }
 
 void
 EndDraw()
 {
     SDL_GL_SwapWindow(gSdlState.Window);
+    gGlState.DrawReady = false;
 }
 
 void
@@ -853,6 +817,7 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
              vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
              int VertexCount, int MaxVertexCount, int IndexCount)
 {
+    Assert(gGlState.DrawReady);
     Assert(Positions);
     Assert(TexCoords);
     Assert(Colors);
@@ -881,12 +846,10 @@ DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
 void
 FlipTexCoords(vec2 *TexCoords)
 {
-    vec2 Temp = TexCoords[0];
-    TexCoords[0] = TexCoords[1];
-    TexCoords[1] = Temp;
-    Temp = TexCoords[2];
-    TexCoords[2] = TexCoords[3];
-    TexCoords[3] = Temp;
+    for (int i = 0; i < 4; i++)
+    {
+        TexCoords[i].Y = 1.0f - TexCoords[i].Y;
+    }
 }
 
 void
@@ -1137,10 +1100,7 @@ CameraIncreaseLogZoomSteps(camera_2d *Camera, int Steps)
     Camera->Zoom = ExponentialInterpolation(Camera->ZoomMin, Camera->ZoomMax, Camera->ZoomLogSteps[Camera->ZoomLogStepsCurrent]);
 }
 
-//
-// NOTE: Image/texture loading
-//
-
+// SECTION: Image/texture loading
 sav_image
 SavLoadImage(const char *Path)
 {
@@ -1329,6 +1289,7 @@ BeginTextureMode(sav_render_texture RenderTexture, rect RenderTextureScreenRect)
     GlState->RenderTextureActive = true;
     GlState->CurrentRenderTextureScreenRect = RenderTextureScreenRect;
     GlState->CurrentRenderTexture = RenderTexture;
+    GlState->DrawReady = true;
 }
 
 void
@@ -1336,12 +1297,10 @@ EndTextureMode()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     gGlState.RenderTextureActive = false;
+    gGlState.DrawReady = false;
 }
 
-//
-// NOTE: Fonts and text rendering
-//
-
+// SECTION: Fonts and text rendering
 u32
 LoadTextureFromFont(void *Data, u32 Width, u32 Height)
 {
@@ -1661,9 +1620,7 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
     MemoryArena_Unfreeze(TransientArena);
 }
 
-//
-// NOTE: GUI Collisions
-//
+// SECTION: GUI
 b32
 CheckPointInRect(vec2 P, rect R)
 {
@@ -1672,9 +1629,6 @@ CheckPointInRect(vec2 P, rect R)
     return (P.X > MinR.X && P.Y > MinR.Y && P.X < MaxR.X && P.Y < MaxR.Y);
 }
 
-//
-// NOTE: GUI
-//
 b32
 GuiButtonRect(rect R)
 {
@@ -1695,10 +1649,7 @@ GuiButtonRect(rect R)
     return false;
 }
 
-//
-// NOTE: Misc
-//
-
+// SECTION: Misc
 const char *
 TextFormat(const char *Format, ...)
 {
@@ -1722,4 +1673,16 @@ TraceLog(const char *Format, ...)
     va_start(VarArgs, Format);
     vprintf_s(FormatBuf, VarArgs);
     va_end(VarArgs);
+}
+
+int
+GetRandomValue(int Min, int Max)
+{
+    return (Min + rand() % (Max - Min));
+}
+
+f32
+GetRandomFloat()
+{
+    return (rand() / (f32) RAND_MAX);
 }

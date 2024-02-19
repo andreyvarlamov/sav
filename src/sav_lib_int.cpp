@@ -6,14 +6,11 @@
 struct sdl_state
 {
     SDL_Window *Window;
-
-    window_size WindowSize;
+    vec2 WindowSize;
+    vec2 WindowOrigSize;
 
     b32 Borderless;
-    i32 WidthBeforeBorderless;
-    i32 HeightBeforeBorderless;
-    i32 XBeforeBorderless;
-    i32 YBeforeBorderless;
+    rect WindowRectBeforeBorderless;
 
     u64 PerfCounterFreq;
     u64 LastCounter;
@@ -80,6 +77,8 @@ struct gl_state
     b32 RenderTextureActive;
     rect CurrentRenderTextureScreenRect;
     sav_render_texture CurrentRenderTexture;
+
+    b32 DrawReady;
 };
 
 static_g sdl_state gSdlState;

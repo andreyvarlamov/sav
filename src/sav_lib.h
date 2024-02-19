@@ -20,14 +20,6 @@ struct game_memory
     size_t Size;
 };
 
-struct window_size
-{
-    int Width;
-    int Height;
-    int OriginalWidth;
-    int OriginalHeight;
-};
-
 struct music_stream
 {
     void *Music;
@@ -115,7 +107,8 @@ SAV_API void PollEvents(b32 *Quit);
 SAV_API void Quit();
 
 SAV_API void SetWindowTitle(const char *Title);
-SAV_API window_size GetWindowSize();
+SAV_API vec2 GetWindowSize();
+SAV_API vec2 GetWindowOrigSize();
 SAV_API void SetWindowBorderless(b32 Borderless);
 SAV_API void ToggleWindowBorderless();
 
@@ -192,6 +185,8 @@ SAV_API b32 GuiButtonRect(rect R);
 
 SAV_API const char *TextFormat(const char *Format, ...);
 SAV_API void TraceLog(const char *Format, ...);
+SAV_API int GetRandomValue(int Min, int Max);
+SAV_API f32 GetRandomFloat();
 
 //
 // NOTE: QOL inline overloads
@@ -200,6 +195,17 @@ inline void
 DrawTexture(sav_texture Texture, rect Dest, color Color)
 {
     DrawTexture(Texture, Dest, Rect(Texture.Width, Texture.Height), Vec2(), 0.0f, Color);
+}
+
+inline void
+DrawTexture(sav_texture Texture, f32 X, f32 Y)
+{
+    DrawTexture(Texture,
+                Rect(X, Y, (f32) Texture.Width, (f32) Texture.Height),
+                Rect(Texture.Width, Texture.Height),
+                Vec2(),
+                0.0f,
+                VA_WHITE);
 }
 
 inline void
@@ -213,12 +219,10 @@ DrawTexture(sav_texture Texture, f32 X, f32 Y, f32 Scale, color Color)
                 Color);
 }
 
-inline rect
-GetWindowRect()
+inline void
+DrawTexture(sav_texture Texture, rect Dest, rect Source, color Color)
 {
-    window_size Size = GetWindowSize();
-    rect Result = Rect((f32) Size.Width, (f32) Size.Height);
-    return Result;
+    DrawTexture(Texture, Dest, Source, Vec2(), 0.0f, Color);
 }
 
 inline rect

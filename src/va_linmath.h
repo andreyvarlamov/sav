@@ -378,17 +378,12 @@ Vec3Lerp(vec3 A, vec3 B, f32 LerpFactor)
 
 // NOTE: Rect-V2/V3 helpers
 
-inline vec2
-RectGetMin(rect Rect)
-{
-    return Vec2(Rect.X, Rect.Y);
-}
-
-inline vec2
-RectGetMax(rect Rect)
-{
-    return Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height);
-}
+inline rect Rect(vec2 Dim) { return Rect(0.0f, 0.0f, Dim.X, Dim.Y); }
+inline rect Rect(vec2 Min, vec2 Dim) { return Rect(Min.X, Min.Y, Dim.X, Dim.Y); }
+inline rect Rect(f32 X, f32 Y, vec2 Dim) { return Rect(X, Y, Dim.X, Dim.Y); }
+inline rect RectMinMax(vec2 Min, vec2 Max) { return Rect(Min.X, Min.Y, Max.X - Min.X, Max.Y - Min.Y); }
+inline vec2 RectGetMin(rect Rect) { return Vec2(Rect.X, Rect.Y); }
+inline vec2 RectGetMax(rect Rect) { return Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height); }
 
 inline void
 RectGetPoints(rect Rect, vec2 *Points)
@@ -433,7 +428,7 @@ inline vec4 Vec4(vec3 V, f32 W) { return Vec4(V.X, V.Y, V.Z, W); }
 inline vec4 Vec4(vec3 V) { return Vec4(V, 0.0f); }
 inline vec4 Vec4(vec2 V, f32 Z, f32 W) { return Vec4(V.X, V.Y, Z, W); }
 inline vec3 Vec3(vec4 V) { return Vec3(V.X, V.Y, V.Z);}
-inline vec2 Vec2(vec4 V) { return Vec2(Vec3(V)); }
+inline vec2 Vec2(vec4 V) { return Vec2(V.X, V.Y); }
 inline vec4 operator+(vec4 V0, vec4 V1) { return Vec4(V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z, V0.W + V1.W); }
 inline vec4 operator-(vec4 V0) { return Vec4(-V0.X, -V0.Y, -V0.Z, -V0.W); }
 inline vec4 operator-(vec4 V0, vec4 V1) { return V0 + (-V1); }
@@ -1402,6 +1397,12 @@ operator/(f32 I, vec2i V)
 {
     vec2i Result = Vec2I((i32) (I / V.X), (i32) (I / V.Y));
     return Result;
+}
+
+inline b32
+operator==(vec2i A, vec2i B)
+{
+    return (A.X == B.X && A.Y == B.Y);
 }
 
 // -------------------------------------------------------------------------------
