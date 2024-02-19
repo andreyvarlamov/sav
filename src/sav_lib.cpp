@@ -310,12 +310,17 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 gl_state *GlState = &gGlState;
                 GlState->DefaultTextureGlid = DefaultTexture.Glid;
 
-                GlState->ShaderProgram = BuildBasicShader();
+                GlState->DefaultShader = BuildBasicShader();
                 GlState->MaxVertexCount = 4096;
                 GlState->MaxIndexCount = 16384;
-                PrepareGpuData(&GlState->VBO, &GlState->VAO, &GlState->EBO, GlState->MaxVertexCount, GlState->MaxIndexCount);
+                PrepareGpuData(&GlState->DefaultVBO,
+                               &GlState->DefaultVAO,
+                               &GlState->DefaultEBO,
+                               GlState->MaxVertexCount,
+                               GlState->MaxIndexCount);
 
-                UseProgram(GlState->ShaderProgram);
+                GlState->CurrentShader = GlState->DefaultShader;
+                UseProgram(GlState->CurrentShader);
                 SetProjectionMatrix(Mat4(1.0f));
                 SetModelViewMatrix(Mat4(1.0f));
 
@@ -667,15 +672,59 @@ void FreeSoundChunk(sound_chunk Chunk)
 }
 
 // SECTION: Drawing
+static_i u32
+BuildShadersFromStr(const char *VertSource, const char *FragSource)
+{
+    u32 VertShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(VertShader, 1, &VertSource, NULL);
+    glCompileShader(VertShader);
+    
+    int Success;
+    char InfoLog[512];
+    glGetShaderiv(VertShader, GL_COMPILE_STATUS, &Success);
+    if (!Success)
+    {
+        glGetShaderInfoLog(VertShader, 512, NULL, InfoLog);
+        TraceLog("Vertex shader compilation error:\n%s\n\n", InfoLog);
+    }
+    
+    u32 FragShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(FragShader, 1, &FragSource, NULL);
+    glCompileShader(FragShader);
+    
+    glGetShaderiv(FragShader, GL_COMPILE_STATUS, &Success);
+    if (!Success)
+    {
+        glGetShaderInfoLog(FragShader, 512, NULL, InfoLog);
+        TraceLog("Fragment shader compilation error:\n%s\n\n", InfoLog);
+    }
+    
+    u32 Program = glCreateProgram();
+    glAttachShader(Program, VertShader);
+    glAttachShader(Program, FragShader);
+    glLinkProgram(Program);
+
+    glGetProgramiv(Program, GL_LINK_STATUS, &Success);
+    if (!Success)
+    {
+        glGetProgramInfoLog(Program, 512, NULL, InfoLog);
+        TraceLog("Linking error:\n%s\n\n", InfoLog);
+    }
+    glDeleteShader(VertShader);
+    glDeleteShader(FragShader);
+
+    return Program;
+}
+
 u32
 BuildBasicShader()
 {
-    const char *vertexShaderSource =
+    const char *VertSource =
         "#version 330 core\n"
         "layout (location = 0) in vec3 vertPosition;\n"
-        "layout (location = 1) in vec2 vertTexCoord;\n"
+        "layout (location = 1) in vec4 vertTexCoord;\n"
         "layout (location = 2) in vec4 vertColor;\n"
-        "out vec2 fragTexCoord;\n"
+        "out vec4 fragTexCoord;\n"
         "out vec4 fragColor;\n"
         "uniform mat4 mvp;\n"
         "void main()\n"
@@ -685,68 +734,111 @@ BuildBasicShader()
         "   gl_Position = mvp * vec4(vertPosition, 1.0);\n"
         "}\0";
     
-    u32 vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    
-    int success;
-    char infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        printf("Vertex shader compilation error:\n%s\n\n", infoLog);
-    }
-    
-    const char *fragmentShaderSource =
+    const char *FragSource =
         "#version 330 core\n"
-        "in vec2 fragTexCoord;\n"
+        "in vec4 fragTexCoord;\n"
         "in vec4 fragColor;\n"
         "out vec4 finalColor;\n"
         "uniform sampler2D texture0;\n"
-        "uniform vec4 colorDiffuse;\n"
         "void main()\n"
         "{\n"
-        "   vec4 texelColor = texture(texture0, fragTexCoord);\n"
-        // "   finalColor = texelColor * colorDiffuse * fragColor;\n"
+        "   vec4 texelColor = texture(texture0, fragTexCoord.xy);\n"
         "   finalColor = fragColor * texelColor;\n"
-        // "   finalColor = vec4(1.0);\n"
         "}\n\0";
      
-    u32 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    return BuildShadersFromStr(VertSource, FragSource);
+}
 
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
+sav_shader
+BuildCustomShader(const char *VertPath, const char *FragPath)
+{
+    TraceLog("Building custom shader program with shaders: %s, %s", VertPath, FragPath);
     
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        printf("Fragment shader compilation error:\n%s\n\n", infoLog);
-    }
+    char *VertSource = SavReadTextFile(VertPath);
+    char *FragSource = SavReadTextFile(FragPath);
+
+    u32 ShaderID = BuildShadersFromStr(VertSource, FragSource);
+
+    SavFreeString(&VertSource);
+    SavFreeString(&FragSource);
+
+    sav_shader Result;
+    Result.Glid = ShaderID;
     
-    u32 shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        printf("Linking error:\n%s\n\n", infoLog);
-    }
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    return shaderProgram;
+    return Result;
 }
 
 void
-SetUniformMat4(u32 ShaderID, const char *UniformName, f32 *Value)
+DeleteShader(sav_shader *Shader)
 {
-    i32 UniformLocation = glGetUniformLocation(ShaderID, UniformName);
-    Assert(UniformLocation != -1);
+    glDeleteProgram(Shader->Glid);
+    Shader->Glid = 0;
+}
+
+void
+BeginShaderMode(sav_shader Shader)
+{
+    gGlState.CurrentShader = Shader.Glid;
+    UseProgram(Shader.Glid);
+}
+
+void
+EndShaderMode()
+{
+    gGlState.CurrentShader = gGlState.DefaultShader;
+    UseProgram(gGlState.DefaultShader);
+}
+
+static_i int
+GetUniformLocation(u32 Shader, const char *UniformName)
+{
+    int UniformLocation = glGetUniformLocation(gGlState.CurrentShader, UniformName);
+
+    #ifdef SAV_DEBUG
+    if (UniformLocation == -1)
+    {
+        GLenum Error = glGetError();
+        TraceLog("Failed to get uniform \"%s\" for ShaderID %d. Error code: %d", UniformName, Shader, Error);
+        // InvalidCodePath;
+    }
+    #endif
+
+    return UniformLocation;
+}
+
+void
+SetUniformMat4(const char *UniformName, f32 *Value)
+{
+    int UniformLocation = GetUniformLocation(gGlState.CurrentShader, UniformName);
     glUniformMatrix4fv(UniformLocation, 1, false, Value);
+}
+
+void
+SetUniformVec4(const char *UniformName, f32 *Value)
+{
+    int UniformLocation = GetUniformLocation(gGlState.CurrentShader, UniformName);
+    glUniform4fv(UniformLocation, 1, Value);
+}
+
+void
+SetUniformI(const char *UniformName, int Value)
+{
+    int UniformLocation = GetUniformLocation(gGlState.CurrentShader, UniformName);
+    glUniform1i(UniformLocation, Value);
+}
+
+void
+BindTextureSlot(int Slot, sav_texture Texture)
+{
+    glActiveTexture(GL_TEXTURE0 + Slot);
+    glBindTexture(GL_TEXTURE_2D, Texture.Glid);
+}
+
+void
+UnbindTextureSlot(int Slot)
+{
+    glActiveTexture(GL_TEXTURE0 + Slot);
+    glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 }
 
 void
@@ -774,7 +866,6 @@ BeginDraw()
 void
 EndDraw()
 {
-    SDL_GL_SwapWindow(gSdlState.Window);
     gGlState.DrawReady = false;
 }
 
@@ -792,14 +883,12 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertCount, int MaxIndexCount
     glBufferData(GL_ARRAY_BUFFER, MaxVertCount * BytesPerVertex, 0, GL_DYNAMIC_DRAW);
 
     glBindVertexArray(*VAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), 0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *) (MaxVertCount * 3 * sizeof(float)));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(vec4), (void *) (MaxVertCount * sizeof(vec3)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) (MaxVertCount * 5 * sizeof(float)));
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vec4), (void *) (MaxVertCount * (sizeof(vec3) + sizeof(vec4))));
     glEnableVertexAttribArray(2);
-    // float c[] = { 0.0f, 1.0f ,0.0f, 1.0f };
-    // glVertexAttrib4fv(2, c);
 
     glGenBuffers(1, EBO);
     Assert(*EBO);
@@ -813,34 +902,33 @@ PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertCount, int MaxIndexCount
 }
 
 void
-DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
-             vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
-             int VertexCount, int MaxVertexCount, int IndexCount)
+DrawVertices(vec3 *Positions, vec4 *TexCoords, vec4 *Colors, u32 *Indices, int VertexCount, int IndexCount)
 {
-    Assert(gGlState.DrawReady);
+    gl_state *GlState = &gGlState;
+
+    Assert(GlState->DrawReady);
     Assert(Positions);
     Assert(TexCoords);
     Assert(Colors);
     Assert(VertexCount > 0);
+    Assert(VertexCount < GlState->MaxVertexCount);
+    Assert(IndexCount < GlState->MaxIndexCount);
     
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, GlState->DefaultVBO);
 
     glBufferSubData(GL_ARRAY_BUFFER, 0, VertexCount*sizeof(vec3), Positions);
-    glBufferSubData(GL_ARRAY_BUFFER, MaxVertexCount*sizeof(vec3), VertexCount*sizeof(vec2), TexCoords);
-    glBufferSubData(GL_ARRAY_BUFFER, MaxVertexCount*(sizeof(vec3)+sizeof(vec2)), VertexCount*sizeof(vec4), Colors);
+    glBufferSubData(GL_ARRAY_BUFFER, GlState->MaxVertexCount*sizeof(vec3), VertexCount*sizeof(vec4), TexCoords);
+    glBufferSubData(GL_ARRAY_BUFFER, GlState->MaxVertexCount*(sizeof(vec3)+sizeof(vec4)), VertexCount*sizeof(vec4), Colors);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GlState->DefaultEBO);
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, IndexCount * sizeof(float), Indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     
-    // glUseProgram(ShaderProgram);
-    glBindVertexArray(VAO);
+    glBindVertexArray(GlState->DefaultVAO);
     glDrawElements(GL_TRIANGLES, IndexCount, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
-
-    // glUseProgram(0);
 }
 
 void
@@ -866,19 +954,17 @@ NormalizeTexCoords(sav_texture Texture, vec2 *TexCoords)
 }
 
 void
-RotatePointsAroundOrigin(vec3 *Positions, vec3 Origin, f32 Rotation)
+GetTexCoordsForTex(sav_texture Texture, rect R, vec2 *TexCoords)
 {
-    f32 C = CosF(ToRadiansF(Rotation));
-    f32 S = SinF(ToRadiansF(Rotation));
+    RectGetPoints(R, TexCoords);
+    NormalizeTexCoords(Texture, TexCoords);
+    FlipTexCoords(TexCoords);
+}
 
-    for (int i = 0; i < 4; i++)
-    {
-        Positions[i] -= Origin;
-        f32 X = Positions[i].X;
-        f32 Y = Positions[i].Y;
-        Positions[i] = Vec3(C*X - S*Y, S*X + C*Y, 0.0f);
-        Positions[i] += Origin;
-    }
+void
+SavSwapBuffers()
+{
+    SDL_GL_SwapWindow(gSdlState.Window);
 }
 
 void
@@ -893,12 +979,15 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
     RectGetPoints(Dest, Positions);
     if (Rotation != 0.0f)
     {
-        RotatePointsAroundOrigin(Positions, AbsOrigin, Rotation);
+        Rotate4PointsAroundOrigin(Positions, AbsOrigin, Rotation);
     }
     vec2 TexCoords[4];
-    RectGetPoints(Source, TexCoords);
-    NormalizeTexCoords(Texture, TexCoords);
-    FlipTexCoords(TexCoords);
+    GetTexCoordsForTex(Texture, Source, TexCoords);
+    vec4 TexCoordsV4[4];
+    for (int i = 0; i < ArrayCount(TexCoords); i++)
+    {
+        TexCoordsV4[i] = Vec4(TexCoords[i], 0, 0);
+    }
     vec4 C = ColorV4(Color);
     vec4 Colors[] = { C, C, C, C };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
@@ -907,9 +996,7 @@ DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotati
     glBindTexture(GL_TEXTURE_2D, Texture.Glid);
 
     gl_state *GlState = &gGlState;
-    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
-                 Positions, TexCoords, Colors, Indices,
-                 ArrayCount(Positions), GlState->MaxVertexCount, ArrayCount(Indices));
+    DrawVertices(Positions, TexCoordsV4, Colors, Indices, ArrayCount(Positions), ArrayCount(Indices));
 
     glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 }
@@ -919,15 +1006,13 @@ DrawRect(rect Rect, color Color)
 {
     vec3 Positions[4];
     RectGetPoints(Rect, Positions);
-    vec2 TexCoords[4] = {};
+    vec4 TexCoords[4] = {};
     vec4 C = ColorV4(Color);
     vec4 Colors[] = { C, C, C, C };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
     gl_state *GlState = &gGlState;
-    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
-                 Positions, TexCoords, Colors, Indices,
-                 ArrayCount(Positions), GlState->MaxVertexCount, ArrayCount(Indices));
+    DrawVertices(Positions, TexCoords, Colors, Indices, ArrayCount(Positions), ArrayCount(Indices));
 }
 
 void
@@ -948,7 +1033,7 @@ SetProjectionMatrix(mat4 Projection)
     gl_state *GlState = &gGlState;
     GlState->Projection = Projection;
     mat4 MVP = GlState->Projection * GlState->ModelView;
-    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
+    SetUniformMat4("mvp", &MVP.E[0][0]);
 }
 
 void
@@ -957,7 +1042,7 @@ SetModelViewMatrix(mat4 ModelView)
     gl_state *GlState = &gGlState;
     GlState->ModelView = ModelView;
     mat4 MVP = GlState->Projection * GlState->ModelView;
-    SetUniformMat4(GlState->ShaderProgram, "mvp", &MVP.E[0][0]);
+    SetUniformMat4("mvp", &MVP.E[0][0]);
 }
 
 vec2
@@ -1233,6 +1318,29 @@ SavLoadTextureFromData(void *Data, int Width, int Height)
     return Texture;
 }
 
+void
+SavSetTextureWrapMode(sav_texture Texture, tex_wrap_mode WrapMode)
+{
+    glBindTexture(GL_TEXTURE_2D, Texture.Glid);
+    switch (WrapMode)
+    {
+        case SAV_CLAMP_TO_EDGE:
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } break;
+
+        case SAV_REPEAT:
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        } break;
+
+        default: break;
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 sav_render_texture
 SavLoadRenderTexture(int Width, int Height, b32 FilterNearest)
 {
@@ -1500,7 +1608,7 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
     int IndexCount = StringVisibleCount * 6;
     vec3 *Vertices = MemoryArena_PushArray(TransientArena, VertexCount, vec3);
     vec4 *Colors = MemoryArena_PushArray(TransientArena, VertexCount, vec4);
-    vec2 *TexCoords = MemoryArena_PushArray(TransientArena, VertexCount, vec2); 
+    vec4 *TexCoords = MemoryArena_PushArray(TransientArena, VertexCount, vec4); 
     u32 *Indices = MemoryArena_PushArray(TransientArena, IndexCount, u32);
 
     int CurrentVertexIndex = 0;
@@ -1553,7 +1661,7 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
              GlyphUVIndex < 4;
              ++GlyphUVIndex)
         {
-            TexCoords[CurrentTexCoordIndex++] = GlyphInfo->GlyphUVs[GlyphUVIndex];
+            TexCoords[CurrentTexCoordIndex++] = Vec4(GlyphInfo->GlyphUVs[GlyphUVIndex], 0, 0);
         }
 
         u32 IndicesToCopy[] = {
@@ -1598,22 +1706,18 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
         BgColors[2] = C;
         BgColors[3] = C;
 
-        vec2 BgTexCoords[4] = {};
+        vec4 BgTexCoords[4] = {};
 
         u32 BgIndices[] = {
             0, 1, 3,  3, 1, 2
         };
-        DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
-                     BgVertices, BgTexCoords, BgColors, BgIndices,
-                     ArrayCount(BgVertices), GlState->MaxVertexCount, ArrayCount(BgIndices));
+        DrawVertices(BgVertices, BgTexCoords, BgColors, BgIndices, ArrayCount(BgVertices), ArrayCount(BgIndices));
     }
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, Font->AtlasGlid);
 
-    DrawVertices(GlState->ShaderProgram, GlState->VBO, GlState->VAO, GlState->EBO,
-                 Vertices, TexCoords, Colors, Indices,
-                 VertexCount, GlState->MaxVertexCount, IndexCount);
+    DrawVertices(Vertices, TexCoords, Colors, Indices, VertexCount, IndexCount);
 
     glBindTexture(GL_TEXTURE_2D, gGlState.DefaultTextureGlid);
 
@@ -1648,6 +1752,51 @@ GuiButtonRect(rect R)
 
     return false;
 }
+
+// SECTION: File IO
+char *
+SavReadTextFile(const char *Path)
+{
+    FILE *File;
+    fopen_s(&File, Path, "rb");
+    if (File)
+    {
+        fseek(File, 0, SEEK_END);
+        size_t FileSize = ftell(File);
+        Assert(FileSize > 0);
+        fseek(File, 0, SEEK_SET);
+
+        char *Result = (char *) malloc(FileSize + 1);
+        if (Result)
+        {
+            size_t ElementsRead = fread(Result, FileSize, 1, File);
+            Assert(ElementsRead == 1);
+            Result[FileSize] = '\0';
+
+            fclose(File);
+
+            return Result;
+        }
+        else
+        {
+            TraceLog("Failed to alloc memory when reading file at %s", Path);
+        }
+    }
+    else
+    {
+        TraceLog("Failed to open file at %s", Path);
+    }
+
+    return 0;
+}
+
+void
+SavFreeString(char **Text)
+{
+    free(*Text);
+    *Text = 0;
+}
+
 
 // SECTION: Misc
 const char *

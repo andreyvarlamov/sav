@@ -72,6 +72,11 @@ struct game_state
 
     sav_font *Font;
     glyph_atlas GlyphAtlas;
+    sav_texture VigTex;
+    sav_texture GroundBrushTex;
+    rect GroundBrushRect; // TODO: tex + rect, atlas idiom?
+
+    sav_shader GroundShader;
 
     camera_2d Camera;
 
@@ -81,6 +86,10 @@ struct game_state
     map Map;
 
     vec2i PlayerP;
+
+    vec2 *GroundPoints;
+    vec2 *GroundRots;
+    int GroundPointCount;
 };
 
 inline vec2i
@@ -135,6 +144,96 @@ CheckCollisions(map Map, vec2i P)
     return CI;
 }
 
+sav_texture
+GenerateVignette(memory_arena *TransientArena)
+{
+    int VigDim = 512;
+    MemoryArena_Freeze(TransientArena);
+    u32 *VigData = MemoryArena_PushArray(TransientArena, VigDim*VigDim, u32);
+    f32 FadeOutEndR = VigDim / 2.0f;
+    f32 FadeOutStartR = FadeOutEndR - 256.0f;
+    for (int i = 0; i < VigDim*VigDim; i++)
+    {
+        vec2i P = IdxToXY(i, VigDim);
+            
+        u32 *Pixel = VigData + i;
+
+        vec2 PFromCenter = (Vec2(P) + Vec2(0.5f)) - Vec2(VigDim / 2.0f);
+
+        f32 R = SqrtF(PFromCenter.X * PFromCenter.X + PFromCenter.Y * PFromCenter.Y);
+
+        color C;
+        if (R > FadeOutEndR)
+        {
+            C = ColorAlpha(VA_BLACK, 0);
+        }
+        else if (R > FadeOutStartR && R <= FadeOutEndR)
+        {
+            f32 T = 1.0f - (R - FadeOutStartR) / (FadeOutEndR - FadeOutStartR);
+            f32 A = EaseOutQuad(T);
+            C = ColorAlpha(VA_BLACK, (u8) (A * 255.0f));
+        }
+        else
+        {
+            C = ColorAlpha(VA_BLACK, 255);
+        }
+            
+        *Pixel = C.C32;
+    }
+    // SavSaveImage("temp/vig.png", VigData, VigDim, VigDim, false, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+
+    sav_texture Tex = SavLoadTextureFromData(VigData, VigDim, VigDim);
+    SavSetTextureWrapMode(Tex, SAV_CLAMP_TO_EDGE);
+    
+    MemoryArena_Unfreeze(TransientArena);
+
+    return Tex;
+}
+
+void
+DrawGroundWithVignette(game_state *GameState, f32 X, f32 Y, f32 Scale, f32 SpriteRotation, f32 VigRotation)
+{
+    f32 Variant = 2;
+
+    rect Dest = Rect(X, Y, GameState->GroundBrushRect.Width * Scale, GameState->GroundBrushRect.Height * Scale);
+    Dest.X -= Dest.Width / 2.0f;
+    Dest.Y -= Dest.Height / 2.0f;
+    
+    vec3 Positions[4];
+    RectGetPoints(Dest, Positions);
+    
+    vec2 TexCoords[4];
+    rect Source = Rect(0.0f, Variant * GameState->GroundBrushRect.Height, GameState->GroundBrushRect.Width, GameState->GroundBrushRect.Height);
+    RectGetPoints(Source, TexCoords);
+    Rotate4PointsAroundOrigin(TexCoords, RectGetMid(Source), SpriteRotation);
+    NormalizeTexCoords(GameState->GroundBrushTex, TexCoords);
+    FlipTexCoords(TexCoords);
+
+    vec2 VigTexCoords[4];
+    rect VigSource = Rect(GameState->VigTex.Width, GameState->VigTex.Height);
+    RectGetPoints(VigSource, VigTexCoords);
+    // Rotate4PointsAroundOrigin(VigTexCoords, RectGetMid(VigSource), VigRotation);
+    NormalizeTexCoords(GameState->VigTex, VigTexCoords);
+    FlipTexCoords(VigTexCoords);
+
+    vec4 TexCoordsV4[4];
+    for (int i = 0; i < ArrayCount(TexCoords); i++)
+    {
+        TexCoordsV4[i] = Vec4(TexCoords[i].X, TexCoords[i].Y, VigTexCoords[i].X, VigTexCoords[i].Y);
+    }
+
+    vec4 C = ColorV4(VA_WHITE);
+    vec4 Colors[] = { C, C, C, C };
+
+    u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+
+    BindTextureSlot(1, GameState->GroundBrushTex);
+    BindTextureSlot(2, GameState->VigTex);
+    // UnbindTextureSlot(2);
+           
+    DrawVertices(Positions, TexCoordsV4, Colors, Indices, ArrayCount(Positions), ArrayCount(Indices));
+}
+
 GAME_API void
 UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
 {
@@ -151,12 +250,20 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->ResourceArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->TransientArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+
+        GameState->GroundShader = BuildCustomShader("res/ground.vs", "res/ground.fs");
+        BeginShaderMode(GameState->GroundShader);
+        {
+            SetUniformI("sprite", 1);
+            SetUniformI("vig", 2);
+        }
+        EndShaderMode();
         
         GameState->Camera.Rotation = 0.0f;
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
 
         GameState->uiRect = Rect(GetWindowSize());
-        GameState->RTexUI = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, false);
+        GameState->RTexUI = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, true);
         
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
         GameState->GlyphAtlas.T = SavLoadTexture("res/bloody_font.png");
@@ -181,10 +288,50 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             }
         }
 
+        GameState->VigTex = GenerateVignette(&GameState->TransientArena);
+        GameState->GroundBrushTex = SavLoadTexture("res/GroundBrushes4.png");
+        GameState->GroundBrushRect = Rect(GameState->GroundBrushTex.Width, GameState->GroundBrushTex.Width);
+
         GameState->PlayerP = Vec2I(1, 1);
         UpdateCameraToMapTarget(&GameState->Camera, GameState->Map, GameState->PlayerP);
 
+        int GroundPointsWidth = 10;
+        int GroundPointsHeight = 15;
+        GameState->GroundPointCount = GroundPointsWidth * GroundPointsHeight;
+        GameState->GroundPoints = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
+        GameState->GroundRots = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
+
+        f32 MapPxWidth = (f32) GameState->Map.TilePxW * GameState->Map.Width;
+        f32 MapPxHeight = (f32) GameState->Map.TilePxH * GameState->Map.Height;
+        f32 GroundPointDistX = MapPxWidth / (GroundPointsWidth - 1);
+        f32 GroundPointDistY = MapPxHeight / (GroundPointsHeight - 1);
+        for (int i = 0; i < GameState->GroundPointCount; i++)
+        {
+            vec2i P = IdxToXY(i, GroundPointsWidth);
+            f32 PxX = P.X * GroundPointDistX;
+            f32 PxY = P.Y * GroundPointDistY;
+            f32 RndX = (GetRandomFloat() * 0.1f - 0.05f) * GroundPointDistX;
+            f32 RndY = (GetRandomFloat() * 0.1f - 0.05f) * GroundPointDistY;
+            GameState->GroundPoints[i] = Vec2(PxX + RndX, PxY + RndY);
+
+            f32 SpriteRot = GetRandomFloat() * 360.0f - 180.0f;
+            f32 VigRot = GetRandomFloat() * 360.0f - 180.0f;
+            GameState->GroundRots[i] = Vec2(SpriteRot, VigRot);
+        }
+
         GameState->IsInitialized = true;
+    }
+
+    if (Reloaded)
+    {
+        DeleteShader(&GameState->GroundShader);
+        GameState->GroundShader = BuildCustomShader("res/ground.vs", "res/ground.fs");
+        BeginShaderMode(GameState->GroundShader);
+        {
+            SetUniformI("sprite", 1);
+            SetUniformI("vig", 2);
+        }
+        EndShaderMode();
     }
 
     // SECTION: First updates
@@ -209,20 +356,29 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_C)) RequestedPlayerDP = Vec2I( 1,  1);
 
     // SECTION: Game logic
-    vec2i NewPlayerP = GameState->PlayerP + RequestedPlayerDP;
-    collision_info Col = CheckCollisions(GameState->Map, NewPlayerP);
-    if (Col.Collided)
+    if (RequestedPlayerDP.X != 0 || RequestedPlayerDP.Y != 0)
     {
-        if (Col.Enemy)
+        vec2i NewPlayerP = GameState->PlayerP + RequestedPlayerDP;
+        collision_info Col = CheckCollisions(GameState->Map, NewPlayerP);
+        if (Col.Collided)
         {
-            *Col.Enemy -= 3;
-            TraceLog("Player hit enemy. Enemy health: %d", *Col.Enemy);
+            if (Col.Enemy)
+            {
+                *Col.Enemy -= 3;
+                TraceLog("Player hit enemy. Enemy health: %d", *Col.Enemy);
+            }
+        }
+        else
+        {
+            GameState->PlayerP = NewPlayerP;
+            UpdateCameraToMapTarget(&GameState->Camera, GameState->Map, GameState->PlayerP);
         }
     }
-    else
+
+    f32 RotSpeed = 100.0f;
+    for (int i = 0; i < GameState->GroundPointCount; i++)
     {
-        GameState->PlayerP = NewPlayerP;
-        UpdateCameraToMapTarget(&GameState->Camera, GameState->Map, GameState->PlayerP);
+        GameState->GroundRots[i].E[0] += (GetRandomFloat() * 5.0f - 2.5f) * RotSpeed * (f32) GetDeltaFixed();
     }
 
     // SECTION: Render
@@ -241,10 +397,29 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
     EndTextureMode();
 
+    BeginShaderMode(GameState->GroundShader);
+    {
+        BeginDraw();
+        {
+            ClearBackground(VA_GRAY);
+
+            BeginCameraMode(&GameState->Camera);
+            {
+                for (int i = 0; i < GameState->GroundPointCount; i++)
+                {
+                    vec2 P = GameState->GroundPoints[i];
+                    vec2 Rots = GameState->GroundRots[i];
+                    DrawGroundWithVignette(GameState, P.X, P.Y, 10.0f, Rots.E[0], Rots.E[1]);
+                }
+            }
+            EndCameraMode();
+        }
+        EndDraw();
+    }
+    EndShaderMode();
+
     BeginDraw();
     {
-        ClearBackground(VA_GRAY);
-        
         BeginCameraMode(&GameState->Camera);
         {
             for (int i = 0; i < GameState->Map.Width * GameState->Map.Height; i++)
@@ -279,4 +454,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         DrawTexture(GameState->RTexUI.Texture, GameState->uiRect, VA_WHITE);
     }
     EndDraw();
+
+    SavSwapBuffers();
 }

@@ -2,7 +2,7 @@
 #define VA_LINMATH_H
 
 #include <varand/varand_types.h>
-#include <varand/varand_math.h>
+#include "va_math.h"
 #include "va_colors.h"
 #include "va_rect.h"
 
@@ -384,6 +384,7 @@ inline rect Rect(f32 X, f32 Y, vec2 Dim) { return Rect(X, Y, Dim.X, Dim.Y); }
 inline rect RectMinMax(vec2 Min, vec2 Max) { return Rect(Min.X, Min.Y, Max.X - Min.X, Max.Y - Min.Y); }
 inline vec2 RectGetMin(rect Rect) { return Vec2(Rect.X, Rect.Y); }
 inline vec2 RectGetMax(rect Rect) { return Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height); }
+inline vec2 RectGetMid(rect Rect) { return Vec2(Rect.X + Rect.Width / 2.0f, Rect.Y + Rect.Height / 2.0f); }
 
 inline void
 RectGetPoints(rect Rect, vec2 *Points)
@@ -427,6 +428,7 @@ inline vec4 Vec4(f32 X, f32 Y, f32 Z, f32 W) { vec4 Result = {}; Result.X = X; R
 inline vec4 Vec4(vec3 V, f32 W) { return Vec4(V.X, V.Y, V.Z, W); }
 inline vec4 Vec4(vec3 V) { return Vec4(V, 0.0f); }
 inline vec4 Vec4(vec2 V, f32 Z, f32 W) { return Vec4(V.X, V.Y, Z, W); }
+inline vec4 Vec4(vec2 V1, vec2 V2) { return Vec4(V1.X, V1.Y, V2.X, V2.Y); }
 inline vec3 Vec3(vec4 V) { return Vec3(V.X, V.Y, V.Z);}
 inline vec2 Vec2(vec4 V) { return Vec2(V.X, V.Y); }
 inline vec4 operator+(vec4 V0, vec4 V1) { return Vec4(V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z, V0.W + V1.W); }
@@ -1262,6 +1264,39 @@ Mat4GetCamera2DViewInvRel(f32 S, f32 Rot)
  
     return Result;
 }
+
+inline void
+Rotate4PointsAroundOrigin(vec2 *Positions, vec2 Origin, f32 Rotation)
+{
+    f32 C = CosF(ToRadiansF(Rotation));
+    f32 S = SinF(ToRadiansF(Rotation));
+
+    for (int i = 0; i < 4; i++)
+    {
+        Positions[i] -= Origin;
+        f32 X = Positions[i].X;
+        f32 Y = Positions[i].Y;
+        Positions[i] = Vec2(C*X - S*Y, S*X + C*Y);
+        Positions[i] += Origin;
+    }
+}
+
+inline void
+Rotate4PointsAroundOrigin(vec3 *Positions, vec3 Origin, f32 Rotation)
+{
+    f32 C = CosF(ToRadiansF(Rotation));
+    f32 S = SinF(ToRadiansF(Rotation));
+
+    for (int i = 0; i < 4; i++)
+    {
+        Positions[i] -= Origin;
+        f32 X = Positions[i].X;
+        f32 Y = Positions[i].Y;
+        Positions[i] = Vec3(C*X - S*Y, S*X + C*Y, 0.0f);
+        Positions[i] += Origin;
+    }
+}
+
 
 // -------------------------------------------------------------------------------
 // VECTOR 2 INTEGER --------------------------------------------------------------

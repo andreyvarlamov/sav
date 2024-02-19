@@ -17,7 +17,7 @@ set lopt=/libpath:%libsdir% /debug /opt:ref /incremental:no
 pushd %bindir%
 
 rem /section:.shared,rw 
-cl %srcdir%\sav_lib.cpp %copt% %cwopt% /DSAV_EXPORTS /link %llib% %lopt%
+cl %srcdir%\sav_lib.cpp %copt% %cwopt% /DSAV_EXPORTS /DSAV_DEBUG /link %llib% %lopt%
 
 popd
 

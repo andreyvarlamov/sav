@@ -95,6 +95,17 @@ struct sav_render_texture
     sav_texture Texture;
 };
 
+struct sav_shader
+{
+    u32 Glid;
+};
+
+enum tex_wrap_mode
+{
+    SAV_CLAMP_TO_EDGE,
+    SAV_REPEAT
+};
+
 SAV_API game_memory AllocGameMemory(size_t Size);
 SAV_API void DumpGameMemory(game_memory GameMemory);
 SAV_API void ReloadGameMemoryDump(game_memory GameMemory);
@@ -142,15 +153,25 @@ SAV_API b32 PlaySoundChunk(sound_chunk Chunk);
 SAV_API void FreeMusicStream(music_stream Stream);
 SAV_API void FreeSoundChunk(sound_chunk Chunk);
 
-SAV_API u32 BuildBasicShader();
+SAV_API sav_shader BuildCustomShader(const char *VertPath, const char *FragPath);
+SAV_API void DeleteShader(sav_shader *Shader);
+SAV_API void BeginShaderMode(sav_shader Shader);
+SAV_API void EndShaderMode();
+SAV_API void SetUniformMat4(const char *UniformName, f32 *Value);
+SAV_API void SetUniformVec4(const char *UniformName, f32 *Value);
+SAV_API void SetUniformI(const char *UniformName, int Value);
+SAV_API void BindTextureSlot(int Slot, sav_texture Texture);
+SAV_API void UnbindTextureSlot(int Slot);
+SAV_API void FlipTexCoords(vec2 *TexCoords);
+SAV_API void NormalizeTexCoords(sav_texture Texture, vec2 *TexCoords);
+SAV_API void GetTexCoordsForTex(sav_texture Texture, rect R, vec2 *TexCoords);
+SAV_API void SavSwapBuffers();
 
 SAV_API void ClearBackground(color Color);
 SAV_API void BeginDraw();
 SAV_API void EndDraw();
 SAV_API void PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertexCount, int MaxIndexCount);
-SAV_API void DrawVertices(u32 ShaderProgram, u32 VBO, u32 VAO, u32 EBO,
-                          vec3 *Positions, vec2 *TexCoords, vec4 *Colors, u32 *Indices,
-                          int VertexCount, int MaxVertexCount, int IndexCount);
+SAV_API void DrawVertices(vec3 *Positions, vec4 *TexCoords, vec4 *Colors, u32 *Indices, int VertexCount, int IndexCount);
 SAV_API void DrawTexture(sav_texture Texture, rect Dest, rect Source, vec2 Origin, f32 Rotation, color Color);
 SAV_API void DrawRect(rect Rect, color Color);
 
@@ -174,6 +195,7 @@ SAV_API void SavSaveImage(const char *Path, void *Data, int Width, int Height, b
 SAV_API sav_texture SavLoadTexture(const char *Path);
 SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
 SAV_API sav_texture SavLoadTextureFromData(void *ImageData, int Width, int Height);
+SAV_API void SavSetTextureWrapMode(sav_texture Texture, tex_wrap_mode WrapMode);
 SAV_API sav_render_texture SavLoadRenderTexture(int Width, int Height, b32 FilterNearest);
 SAV_API void BeginTextureMode(sav_render_texture RenderTexture, rect RenderTextureScreenRect);
 SAV_API void EndTextureMode();
@@ -182,6 +204,9 @@ SAV_API sav_font *SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSi
 SAV_API void DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, color Color, b32 DrawBg, color BgColor, memory_arena *TransientArena);
 
 SAV_API b32 GuiButtonRect(rect R);
+
+SAV_API char *SavReadTextFile(const char *Path);
+SAV_API void SavFreeString(char **Text);
 
 SAV_API const char *TextFormat(const char *Format, ...);
 SAV_API void TraceLog(const char *Format, ...);
