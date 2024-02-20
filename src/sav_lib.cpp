@@ -259,6 +259,7 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
         SdlState->Window = SDL_CreateWindow(WindowName,
                                             3160, 40,
                                             WindowWidth, WindowHeight,
@@ -302,8 +303,6 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 // TODO: Don't do the following things in this function
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
- 
-                glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 
                 u32 White = 0xFFFFFFFF;
                 sav_texture DefaultTexture = SavLoadTextureFromData(&White, 1, 1);
@@ -846,7 +845,7 @@ ClearBackground(color Color)
 {
     vec4 C = ColorV4(Color);
     glClearColor(C.R, C.G, C.B, C.A);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 void
@@ -1011,7 +1010,6 @@ DrawRect(rect Rect, color Color)
     vec4 Colors[] = { C, C, C, C };
     u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
 
-    gl_state *GlState = &gGlState;
     DrawVertices(Positions, TexCoords, Colors, Indices, ArrayCount(Positions), ArrayCount(Indices));
 }
 
