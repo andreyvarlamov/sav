@@ -1,7 +1,7 @@
 #ifndef VA_COLORS_H
 #define VA_COLORS_H
 
-#include <varand/varand_types.h>
+#include "va_types.h"
 
 // NOTE: With little endian, 4 byte RGBA is 4 bytes in this order: A B G R
 // This way an array of colors, can be read as a number of u32s correctly. And vice versa.

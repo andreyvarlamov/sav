@@ -1,8 +1,8 @@
 #ifndef VA_MATH_H
 #define VA_MATH_H
 
-#include "varand/varand_types.h"
-#include "varand/varand_util.h"
+#include "va_util.h"
+#include "va_types.h"
 
 #include <cmath>
 #include <cfloat>

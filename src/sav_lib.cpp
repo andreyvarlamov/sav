@@ -1,7 +1,7 @@
 #include "sav_lib.h"
 
-#include <varand/varand_util.h>
-#include <varand/varand_sstring.h>
+#include "va_util.h"
+#include "va_sstring.h"
 #include "va_linmath.h"
 
 #include <windows.h>

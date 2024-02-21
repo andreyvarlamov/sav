@@ -51,7 +51,7 @@ set llib=sav_lib.lib
 
 pushd %bindir%
 
-cl %srcdir%\savt_platform.cpp %copt% %cwopt% /link %llib% %lopt%
+cl %srcdir%\savt_platform.cpp %copt% %cwopt% /DSAV_DEBUG /link %llib% %lopt%
 
 popd
 

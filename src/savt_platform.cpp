@@ -1,7 +1,7 @@
 #include "sav_lib.h"
 
-#include <varand/varand_util.h>
-#include <varand/varand_types.h>
+#include "va_util.h"
+#include "va_types.h"
 
 #include <sdl2/SDL_scancode.h>
 

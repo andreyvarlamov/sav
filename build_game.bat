@@ -21,7 +21,7 @@ copy nul savt_game.lock
 rem Delete all pdbs if can (can't while still running - visual studio locks them all). And quiet the del "access is denied" output
 del savt_game_*.pdb > nul 2> nul
 
-cl %srcdir%\savt_game.cpp %copt% %cwopt% /link %llib% %lopt% /pdb:savt_game_%random%.pdb
+cl %srcdir%\savt_game.cpp %copt% %cwopt% /DSAV_DEBUG /link %llib% %lopt% /pdb:savt_game_%random%.pdb
 
 del savt_game.lock
 

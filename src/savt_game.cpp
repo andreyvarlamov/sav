@@ -1,8 +1,9 @@
 #include "sav_lib.h"
+#include "savt_game.h"
 
-#include <varand/varand_util.h>
-#include <varand/varand_types.h>
-#include <varand/varand_memarena.h>
+#include "va_util.h"
+#include "va_types.h"
+#include "va_memarena.h"
 #include "va_linmath.h"
 #include "va_colors.h"
 #include "va_rect.h"
@@ -14,134 +15,41 @@
 
 #include <cstdio>
 
-static_g int gMapWidth = 24;
-static_g int gMapHeight = 24;
-static_g u8 gMapGlyphs[] = {
-    35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 35, 
-    35, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 35, 
-    35, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 35, 
-    35, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 46, 46, 46, 247, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 254, 254, 46, 46, 247, 247, 247, 247, 46, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 247, 247, 247, 247, 247, 247, 46, 46, 46, 35, 
-    35, 46, 254, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 247, 247, 247, 247, 247, 247, 247, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 247, 247, 247, 247, 247, 247, 46, 46, 35, 
-    35, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 254, 46, 46, 46, 46, 46, 247, 247, 247, 46, 46, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 247, 247, 247, 46, 35, 
-    35, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 35, 
-    35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 
+static_g int gWorldWidth = 24;
+static_g int gWorldHeight = 24;
+static_g u8 gWorldTiles[] = {
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 
+    46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 46, 
+    46, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 46, 
+    46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 46, 46, 46, 247, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 254, 254, 46, 46, 247, 247, 247, 247, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 247, 247, 247, 247, 247, 247, 46, 46, 46, 46, 
+    46, 46, 254, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 247, 247, 247, 247, 247, 247, 247, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 247, 247, 247, 247, 247, 247, 46, 46, 46, 
+    46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 254, 46, 46, 46, 46, 46, 247, 247, 247, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 247, 247, 247, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
+    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
 };
-
-struct glyph_atlas
-{
-    sav_texture T;
-    int GlyphsPerRow;
-    int GlyphPxW;
-    int GlyphPxH;
-};
-
-struct map
-{
-    u8 *Glyphs;
-    int *Enemies;
-    int Width;
-    int Height;
-    int TilePxW;
-    int TilePxH;
-};
-
-struct game_state
-{
-    b32 IsInitialized;
-
-    memory_arena RootArena;
-    memory_arena WorldArena;
-    memory_arena ResourceArena;
-    memory_arena TransientArena;
-
-    sav_font *Font;
-    glyph_atlas GlyphAtlas;
-    sav_texture VigTex;
-    sav_texture GroundBrushTex;
-    rect GroundBrushRect; // TODO: tex + rect, atlas idiom?
-    sav_texture StoneWallTex;
-    sav_shader GroundShader;
-
-    camera_2d Camera;
-
-    rect uiRect;
-    sav_render_texture RTexUI;
-
-    map Map;
-
-    vec2i PlayerP;
-
-    vec2 *GroundPoints;
-    vec2 *GroundRots;
-    int GroundPointCount;
-};
-
-inline vec2i
-IdxToXY(int I, int Width)
-{
-    return Vec2I(I % Width, I / Width);
-}
-
-inline int
-XYToIdx(vec2i P, int Width)
-{
-    return P.Y * Width + P.X;
-}
-
-inline rect
-GetMapDestRect(map Map, vec2i P)
-{
-    return Rect(P.X * Map.TilePxW, P.Y * Map.TilePxH, Map.TilePxW, Map.TilePxH);
-}
-
-inline rect
-GetGlyphSourceRect(glyph_atlas Atlas, u8 Glyph)
-{
-    vec2i P = IdxToXY((int) Glyph, Atlas.GlyphsPerRow);
-    return Rect(P.X * Atlas.GlyphPxW, P.Y * Atlas.GlyphPxH, Atlas.GlyphPxW, Atlas.GlyphPxH);
-}
 
 void
-UpdateCameraToMapTarget(camera_2d *Camera, map Map, vec2i MapP)
+UpdateCameraToWorldTarget(camera_2d *Camera, world World, vec2i WorldP)
 {
-    f32 TargetPxX = (f32) MapP.X * Map.TilePxW + Map.TilePxW / 2.0f;
-    f32 TargetPxY = (f32) MapP.Y * Map.TilePxH + Map.TilePxH / 2.0f;
+    f32 TargetPxX = (f32) WorldP.X * World.TilePxW + World.TilePxW / 2.0f;
+    f32 TargetPxY = (f32) WorldP.Y * World.TilePxH + World.TilePxH / 2.0f;
     Camera->Target = Vec2(TargetPxX, TargetPxY);
-}
-
-struct collision_info
-{
-    b32 Collided;
-    int *Enemy;
-};
-
-collision_info
-CheckCollisions(map Map, vec2i P)
-{
-    int MapI = XYToIdx(P, Map.Width);
-    u8 Glyph = Map.Glyphs[MapI];
-    int *Enemy = Map.Enemies + MapI;
-    
-    collision_info CI;
-    CI.Collided = Glyph == '#' ||  *Enemy > 0;
-    CI.Enemy = (*Enemy > 0) ? Enemy : 0;
-    return CI;
 }
 
 sav_texture
@@ -210,7 +118,7 @@ DrawGround(game_state *GameState)
             {
                 MemoryArena_Freeze(&GameState->TransientArena);
                 
-                int TileCount = GameState->Map.Width * GameState->Map.Height;
+                int TileCount = GameState->World.Width * GameState->World.Height;
                 vec3 *VertPositions = MemoryArena_PushArray(&GameState->TransientArena, TileCount * 4, vec3);
                 vec4 *VertTexCoords = MemoryArena_PushArrayAndZero(&GameState->TransientArena, TileCount * 4, vec4);
                 vec4 *VertColors = MemoryArena_PushArrayAndZero(&GameState->TransientArena, TileCount * 4, vec4);
@@ -218,9 +126,9 @@ DrawGround(game_state *GameState)
                 u32 *VertIndices = MemoryArena_PushArray(&GameState->TransientArena, TileCount * 6, u32);
                 int CurrentIndex = 0;
 
-                for (int MapI = 0; MapI < GameState->Map.Width * GameState->Map.Height; MapI++)
+                for (int WorldI = 0; WorldI < GameState->World.Width * GameState->World.Height; WorldI++)
                 {
-                    switch (GameState->Map.Glyphs[MapI])
+                    switch (GameState->World.Tiles[WorldI])
                     {
                         case '#':
                         case 46:
@@ -241,8 +149,8 @@ DrawGround(game_state *GameState)
                         default: continue;
                     }
                         
-                    vec2i MapP = IdxToXY(MapI, GameState->Map.Width);
-                    rect Dest = GetMapDestRect(GameState->Map, MapP);
+                    vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
+                    rect Dest = GetWorldDestRect(GameState->World, WorldP);
 
                     vec3 Positions[4];
                     RectGetPoints(Dest, Positions);
@@ -369,6 +277,274 @@ DrawGround(game_state *GameState)
     glDisable(GL_STENCIL_TEST);
 }
 
+entity *
+GetEntitiesAt(world *World, vec2i P)
+{
+    int WorldI = XYToIdx(P, World->Width);
+    return World->SpatialEntities[WorldI];
+}
+
+collision_info
+CheckCollisions(world *World, vec2i P)
+{
+    entity *EntityHead = GetEntitiesAt(World, P);
+
+    b32 FoundBlocking = false;
+
+    entity *Entity;
+    for (Entity = EntityHead; Entity; Entity = Entity->Next)
+    {
+        // NOTE: Right now the assumption is that only one entity is blocking per tile
+        // (Otherwise how did an entity move to a blocked tile?)
+        // if (EntityExists(Entity) && Entity->Pos == P && CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+        if (EntityExists(Entity) && Entity->Pos == P)
+        {
+            if (CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+            {
+                FoundBlocking = true;
+                break;
+            }
+            else
+            {
+                Noop;
+            }
+        }
+    }
+
+    Assert(FoundBlocking == (Entity != NULL));
+    
+    collision_info CI;
+    CI.Collided = FoundBlocking;
+    CI.Entity = Entity;
+    return CI;
+}
+
+void
+AddEntityToSpatial(world *World, vec2i Pos, entity *Entity)
+{
+    int WorldI = XYToIdx(Pos, World->Width);
+
+    entity *HeadEntity = World->SpatialEntities[WorldI];
+    if (HeadEntity)
+    {
+        Entity->Next = HeadEntity;
+    }
+
+    World->SpatialEntities[WorldI] = Entity;
+}
+
+void
+RemoveEntityFromSpatial(world *World, vec2i Pos, entity *Entity)
+{
+    int WorldI = XYToIdx(Pos, World->Width);
+
+    entity *HeadEntity = World->SpatialEntities[WorldI];
+
+    Assert(HeadEntity);
+
+    entity *PrevEntity = NULL;
+    entity *SearchEntity = HeadEntity;
+    while (SearchEntity)
+    {
+        if (SearchEntity == Entity)
+        {
+            break;
+        }
+
+        PrevEntity = SearchEntity;
+        SearchEntity = SearchEntity->Next;
+    }
+
+    Assert(SearchEntity);
+        
+    if (PrevEntity)
+    {
+        PrevEntity->Next = Entity->Next;
+    }
+    else
+    {
+        World->SpatialEntities[WorldI] = Entity->Next;
+    }
+
+    Entity->Next = NULL;
+}
+
+entity *
+FindNextFreeEntitySlot(world *World)
+{
+    entity *Entity = World->Entities + World->EntityTightCount;
+    while (Entity->Type > 0)
+    {
+        World->EntityTightCount++;
+        Entity++;
+    }
+    
+    World->EntityTightCount++;
+    
+    entity *NextNextFreeEntity = Entity + 1;
+    while (NextNextFreeEntity->Type > 0)
+    {
+        World->EntityTightCount++;
+        NextNextFreeEntity++;
+    }
+
+    if (World->EntityTightCount > World->EntityUsedCount)
+    {
+        World->EntityUsedCount = World->EntityTightCount;
+    }
+
+    return Entity;
+}
+
+entity *
+AddEntity(world *World, vec2i Pos, entity *CopyEntity)
+{
+    entity *Entity = FindNextFreeEntitySlot(World);
+    
+    *Entity = *CopyEntity;
+    Entity->Pos = Pos;
+
+    AddEntityToSpatial(World, Pos, Entity);
+
+    return Entity;
+}
+
+b32
+MoveEntity(world *World, entity *Entity, vec2i NewP)
+{
+    collision_info Col = CheckCollisions(World, NewP);
+
+    if (Col.Collided)
+    {
+        if (Col.Entity)
+        {
+            Col.Entity->Health -= 3;
+            TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
+            if (Col.Entity->Health < 0.0f)
+            {
+                TraceLog("Entity %p is dead.", Col.Entity);
+            }
+        }
+
+        return false;
+    }
+    else
+    {
+        RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+        AddEntityToSpatial(World, NewP, Entity);
+
+        Entity->Pos = NewP;
+
+        return true;
+    }
+}
+
+void
+DeleteEntity(world *World, entity *Entity)
+{
+    RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+
+    Entity->Type = ENTITY_NONE;
+    
+    int EntityI = (int) (Entity - World->Entities);
+    Assert(EntityI < World->EntityUsedCount);
+    
+    if (EntityI < World->EntityTightCount)
+    {
+        World->EntityTightCount = EntityI;
+    }
+}
+
+b32
+ValidateEntitySpatialPartition(world *World)
+{
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        entity *HeadEntity = World->SpatialEntities[i];
+
+        for (entity *Entity = HeadEntity; Entity; Entity = Entity->Next)
+        {
+            Assert(EntityExists(Entity));
+        }
+    }
+
+    return true;
+}
+
+void
+GenerateWorld(game_state *GameState)
+{
+    world *World = &GameState->World;
+    World->Width = gWorldWidth;
+    World->Height = gWorldHeight;
+    World->TilePxW = GameState->GlyphAtlas.GlyphPxW;
+    World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
+    
+    World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, ArrayCount(gWorldTiles), u8);
+
+    World->EntityUsedCount = 0;
+    World->EntityMaxCount = ENTITY_MAX_COUNT;
+    World->Entities = MemoryArena_PushArray(&GameState->WorldArena, World->EntityMaxCount, entity);
+    World->SpatialEntities = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, entity *);
+
+    for (int i = 0; i < ArrayCount(gWorldTiles); i++)
+    {
+        GameState->World.Tiles[i] = gWorldTiles[i];
+    }
+
+    entity WallBlueprint = {};
+    WallBlueprint.Type = ENTITY_STATIC;
+    WallBlueprint.IsTex = true;
+    WallBlueprint.Tex = GameState->StoneWallTex;
+    WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
+    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING);
+        
+    for (int X = 0; X < World->Width; X++)
+    {
+        AddEntity(World, Vec2I(X, 0), &WallBlueprint);
+        AddEntity(World, Vec2I(X, World->Height - 1), &WallBlueprint);
+    }
+
+    for (int Y = 1; Y < World->Height - 1; Y++)
+    {
+        AddEntity(World, Vec2I(0, Y), &WallBlueprint);
+        AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint);
+    }
+
+    entity PlayerBlueprint = {};
+    PlayerBlueprint.Type = ENTITY_PLAYER;
+    PlayerBlueprint.IsTex = false;
+    PlayerBlueprint.Color = VA_LIGHTBLUE;
+    PlayerBlueprint.Glyph = '@';
+    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 30.0f;
+    SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
+    GameState->PlayerEntity = AddEntity(World, Vec2I(1, 1), &PlayerBlueprint);
+    
+    entity EnemyBlueprint = {};
+    EnemyBlueprint.Type = ENTITY_NPC;
+    EnemyBlueprint.IsTex = false;
+    EnemyBlueprint.Color = VA_CORAL;
+    EnemyBlueprint.Glyph = 1 + 9*16;
+    EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
+    SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
+    
+    int AttemptsToAdd = 15;
+    for (int i = 0; i < AttemptsToAdd; i++)
+    {
+        int X = GetRandomValue(0, World->Width);
+        int Y = GetRandomValue(0, World->Height);
+
+        vec2i P = Vec2I(X, Y);
+        if (!CheckCollisions(World, P).Collided)
+        {
+            AddEntity(World, P, &EnemyBlueprint);
+        }
+    }
+
+    entity TestBlueprint = GetTestEntityBlueprint(ENTITY_ITEM_PICKUP, 2 + 9*16, VA_PINK);
+    AddEntity(World, Vec2I(3, 3), &TestBlueprint);
+}
+
 GAME_API void
 UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
 {
@@ -406,31 +582,15 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->GlyphAtlas.GlyphPxW = 48;
         GameState->GlyphAtlas.GlyphPxH = 72;
 
-        GameState->Map.Glyphs = MemoryArena_PushArray(&GameState->WorldArena, ArrayCount(gMapGlyphs), u8);
-        GameState->Map.Enemies = MemoryArena_PushArray(&GameState->WorldArena, ArrayCount(gMapGlyphs), int);
-        GameState->Map.Width = gMapWidth;
-        GameState->Map.Height = gMapHeight;
-        GameState->Map.TilePxW = GameState->GlyphAtlas.GlyphPxW;
-        GameState->Map.TilePxH = GameState->GlyphAtlas.GlyphPxH;
-        
-        for (int i = 0; i < ArrayCount(gMapGlyphs); i++)
-        {
-            GameState->Map.Glyphs[i] = gMapGlyphs[i];
-            
-            if (GameState->Map.Glyphs[i] != '#' && GetRandomValue(0,100) < 5)
-            {
-                GameState->Map.Enemies[i] = 10;
-            }
-        }
-
         GameState->VigTex = GenerateVignette(&GameState->TransientArena);
         GameState->GroundBrushTex = SavLoadTexture("res/GroundBrushes4.png");
         GameState->GroundBrushRect = Rect(GameState->GroundBrushTex.Width, GameState->GroundBrushTex.Width);
         GameState->StoneWallTex = SavLoadTexture("res/PurgStoneWall2.png");
         SavSetTextureWrapMode(GameState->StoneWallTex, SAV_CLAMP_TO_EDGE);
 
-        GameState->PlayerP = Vec2I(1, 1);
-        UpdateCameraToMapTarget(&GameState->Camera, GameState->Map, GameState->PlayerP);
+        GenerateWorld(GameState);
+
+        UpdateCameraToWorldTarget(&GameState->Camera, GameState->World, GameState->PlayerEntity->Pos);
 
         int GroundPointsWidth = 10;
         int GroundPointsHeight = 15;
@@ -438,10 +598,10 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->GroundPoints = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
         GameState->GroundRots = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
 
-        f32 MapPxWidth = (f32) GameState->Map.TilePxW * GameState->Map.Width;
-        f32 MapPxHeight = (f32) GameState->Map.TilePxH * GameState->Map.Height;
-        f32 GroundPointDistX = MapPxWidth / (GroundPointsWidth - 1);
-        f32 GroundPointDistY = MapPxHeight / (GroundPointsHeight - 1);
+        f32 WorldPxWidth = (f32) GameState->World.TilePxW * GameState->World.Width;
+        f32 WorldPxHeight = (f32) GameState->World.TilePxH * GameState->World.Height;
+        f32 GroundPointDistX = WorldPxWidth / (GroundPointsWidth - 1);
+        f32 GroundPointDistY = WorldPxHeight / (GroundPointsHeight - 1);
         for (int i = 0; i < GameState->GroundPointCount; i++)
         {
             vec2i P = IdxToXY(i, GroundPointsWidth);
@@ -469,6 +629,10 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             SetUniformI("vig", 2);
         }
         EndShaderMode();
+
+        entity E = GetTestEntityBlueprint(ENTITY_STATIC, '$', VA_WHITE);
+        entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E);
+        Noop;
     }
 
     // SECTION: First updates
@@ -483,6 +647,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (MouseDown(SDL_BUTTON_MIDDLE)) GameState->Camera.Target -= CameraScreenToWorldRel(&GameState->Camera, GetMouseRelPos());
 
     vec2i RequestedPlayerDP = Vec2I();
+    b32 RequestedPlayerTurnSkip = false;
     if (KeyPressedOrRepeat(SDL_SCANCODE_Q)) RequestedPlayerDP = Vec2I(-1, -1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_W)) RequestedPlayerDP = Vec2I( 0, -1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_E)) RequestedPlayerDP = Vec2I( 1, -1);
@@ -491,6 +656,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_D)) RequestedPlayerDP = Vec2I( 1,  0);
     if (KeyPressedOrRepeat(SDL_SCANCODE_Z)) RequestedPlayerDP = Vec2I(-1,  1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_C)) RequestedPlayerDP = Vec2I( 1,  1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerTurnSkip = true;
 
     // TODO: SHOULD UI BE DRAWN BEFORE GAME LOGIC, SO WE GET DON'T HAVE TO PROCESS BUTTON PRESSES ON THE NEXT FRAME???????
     BeginTextureMode(GameState->RTexUI, GameState->uiRect);
@@ -509,73 +675,106 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     EndTextureMode();
 
     // SECTION: Game logic
-    if (RequestedPlayerDP.X != 0 || RequestedPlayerDP.Y != 0)
+
+    b32 PlayerTookTurn = false;
+    if (RequestedPlayerTurnSkip)
     {
-        vec2i NewPlayerP = GameState->PlayerP + RequestedPlayerDP;
-        collision_info Col = CheckCollisions(GameState->Map, NewPlayerP);
-        if (Col.Collided)
+        PlayerTookTurn = true;
+    }
+    else if (RequestedPlayerDP.X != 0 || RequestedPlayerDP.Y != 0)
+    {
+        vec2i NewP = GameState->PlayerEntity->Pos + RequestedPlayerDP;
+        if (MoveEntity(&GameState->World, GameState->PlayerEntity, NewP))
         {
-            if (Col.Enemy)
-            {
-                *Col.Enemy -= 3;
-                TraceLog("Player hit enemy. Enemy health: %d", *Col.Enemy);
-            }
-        }
-        else
-        {
-            GameState->PlayerP = NewPlayerP;
-            UpdateCameraToMapTarget(&GameState->Camera, GameState->Map, GameState->PlayerP);
+            PlayerTookTurn = true;
+            UpdateCameraToWorldTarget(&GameState->Camera, GameState->World, NewP);
         }
     }
 
-    // f32 RotSpeed = 100.0f;
-    // for (int i = 0; i < GameState->GroundPointCount; i++)
-    // {
-    //     GameState->GroundRots[i].E[0] += (GetRandomFloat() * 5.0f - 2.5f) * RotSpeed * (f32) GetDeltaFixed();
-    // }
+    if (PlayerTookTurn)
+    {
+        for (int i = 0; i < GameState->World.EntityUsedCount; i++)
+        {
+            entity *Entity = GameState->World.Entities + i;
+            if (Entity->Type == ENTITY_NPC)
+            {
+                int ShouldMove = GetRandomValue(0, 12);
+            
+                if (ShouldMove >= 6)
+                {
+                    int RandDir = GetRandomValue(0, 4); 
+
+                    vec2i NewEntityP = Entity->Pos;
+                    switch (RandDir)
+                    {
+                        case 0:
+                        {
+                            NewEntityP += Vec2I(0, -1);
+                        } break;
+                
+                        case 1:
+                        {
+                            NewEntityP += Vec2I(1, 0);
+                        } break;
+                                    
+                        case 2:
+                        {
+                            NewEntityP += Vec2I(0, 1);
+                        } break;
+                        case 3:
+                        {
+                            NewEntityP += Vec2I(-1, 0);
+                        } break;
+                
+                        default: break;
+                    }
+
+                    MoveEntity(&GameState->World, Entity, NewEntityP);
+                }
+               
+            }
+        }
+    }
+
+    // SECTION: End of frame logic
+    
+    for (int i = 0; i < GameState->World.EntityUsedCount; i++)
+    {
+        entity *Entity = GameState->World.Entities + i;
+
+        if (EntityExists(Entity) && Entity->Health <= 0.0f)
+        {
+            DeleteEntity(&GameState->World, Entity);
+        }
+    }
+
+    Assert(ValidateEntitySpatialPartition(&GameState->World));
 
     // SECTION: Render
+    
     DrawGround(GameState);
     
     BeginDraw();
     {
         BeginCameraMode(&GameState->Camera);
         {
-            for (int i = 0; i < GameState->Map.Width * GameState->Map.Height; i++)
+            for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
             {
-                vec2i MapP = IdxToXY(i, GameState->Map.Width);
-                rect Dest = GetMapDestRect(GameState->Map, MapP);
+                vec2i WorldP = IdxToXY(i, GameState->World.Width);
+                rect Dest = GetWorldDestRect(GameState->World, WorldP);
 
-                if (GameState->Map.Glyphs[i] == '#')
+                entity *Entity = GameState->World.SpatialEntities[i];
+                if (Entity)
                 {
-                    DrawTexture(GameState->StoneWallTex, Dest, VA_WHITE);
-                }
-                else
-                {
-                    color C;
-                    u8 Glyph;
-                    if (MapP == GameState->PlayerP)
+                    if (Entity->IsTex)
                     {
-                        Glyph = '@';
-                        C = VA_LIGHTBLUE;
-                    }
-                    else if (GameState->Map.Enemies[i] > 0)
-                    {
-                        Glyph = 1 + 9*16;
-                        C = VA_CORAL;
+                        DrawTexture(Entity->Tex, Dest, VA_WHITE);
                     }
                     else
                     {
-                        Glyph = GameState->Map.Glyphs[i];
-                        if (Glyph == 46 || Glyph == 254 || Glyph == 247)
-                        {
-                            continue;
-                        }
-                        C = VA_WHITE;
+                        rect Source = GetGlyphSourceRect(GameState->GlyphAtlas, Entity->Glyph);
+                        DrawTexture(GameState->GlyphAtlas.T, Dest, Source, Entity->Color);
                     }
-                    rect Source = GetGlyphSourceRect(GameState->GlyphAtlas, Glyph);
-
-                    DrawTexture(GameState->GlyphAtlas.T, Dest, Source, C);
                 }
             }
         }

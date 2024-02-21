@@ -1,8 +1,8 @@
 #ifndef SAV_LIB_H
 #define SAV_LIB_H
 
-#include <varand/varand_types.h>
-#include <varand/varand_memarena.h>
+#include "va_types.h"
+#include "va_memarena.h"
 #include "va_linmath.h"
 #include "va_rect.h"
 

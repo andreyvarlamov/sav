@@ -1,7 +1,7 @@
 #ifndef VA_RECT_H
 #define VA_RECT_H
 
-#include <varand/varand_types.h>
+#include "va_types.h"
 
 struct rect
 {

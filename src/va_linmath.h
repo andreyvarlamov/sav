@@ -1,7 +1,7 @@
 #ifndef VA_LINMATH_H
 #define VA_LINMATH_H
 
-#include <varand/varand_types.h>
+#include "va_types.h"
 #include "va_math.h"
 #include "va_colors.h"
 #include "va_rect.h"
@@ -37,6 +37,15 @@ Vec2(f32 X, f32 Y)
     Result.X = X;
     Result.Y = Y;
 
+    return Result;
+}
+
+inline vec2
+Vec2(int X, int Y)
+{
+    vec2 Result = {};
+    Result.X = (f32) X;
+    Result.Y = (f32) Y;
     return Result;
 }
 
@@ -1311,134 +1320,28 @@ union vec2i
     i32 E[2];
 };
 
-inline vec2i
-Vec2I()
-{
-    vec2i Result = {};
-    return Result;
-}
-
-inline vec2i
-Vec2I(i32 X, i32 Y)
-{
-    vec2i Result = {};
-
-    Result.X = X;
-    Result.Y = Y;
-
-    return Result;
-}
-
-inline vec2i
-Vec2I(i32 Value)
-{
-    vec2i Result = Vec2I(Value, Value);
-    return Result;
-}
-
-inline vec2i
-Vec2I(vec2 V_F)
-{
-    vec2i Result = Vec2I((i32) V_F.X, (i32) V_F.Y);
-    return Result;
-}
-
-inline vec2
-Vec2(vec2i V_I)
-{
-    vec2 Result = Vec2((f32) V_I.X, (f32) V_I.Y);
-    return Result;
-}
-
-inline vec2i
-operator+(vec2i A, vec2i B)
-{
-    vec2i Result = Vec2I(A.X + B.X, A.Y + B.Y);
-    return Result;
-}
-
-inline vec2i
-operator-(vec2i A, vec2i B)
-{
-    vec2i Result = Vec2I(A.X - B.X, A.Y - B.Y);
-    return Result;
-}
-
-inline vec2i
-operator-(vec2i V)
-{
-    vec2i Result = Vec2I(-V.X, -V.Y);
-    return Result;
-}
-
-inline vec2i
-operator*(vec2i A, vec2i B)
-{
-    vec2i Result = Vec2I(A.X * B.X, A.Y * B.Y);
-    return Result;
-}
-
-inline vec2i
-operator*(vec2i V, i32 I)
-{
-    vec2i Result = Vec2I(V.X * I, V.Y * I);
-    return Result;
-}
-
-inline vec2i
-operator*(vec2i V, f32 I)
-{
-    vec2i Result = Vec2I((i32) (V.X * I), (i32) (V.Y * I));
-    return Result;
-}
-
-inline vec2i
-operator*(i32 I, vec2i V)
-{
-    vec2i Result = Vec2I(V.X * I, V.Y * I);
-    return Result;
-}
-
-inline vec2i
-operator*(f32 I, vec2i V)
-{
-    vec2i Result = Vec2I((i32) (V.X * I), (i32) (V.Y * I));
-    return Result;
-}
-
-inline vec2i
-operator/(vec2i V, i32 I)
-{
-    vec2i Result = Vec2I(V.X / I, V.Y / I);
-    return Result;
-}
-
-inline vec2i
-operator/(vec2i V, f32 I)
-{
-    vec2i Result = Vec2I((i32) (V.X / I), (i32) (V.Y / I));
-    return Result;
-}
-
-inline vec2i
-operator/(i32 I, vec2i V)
-{
-    vec2i Result = Vec2I(I / V.X, I / V.Y);
-    return Result;
-}
-
-inline vec2i
-operator/(f32 I, vec2i V)
-{
-    vec2i Result = Vec2I((i32) (I / V.X), (i32) (I / V.Y));
-    return Result;
-}
-
-inline b32
-operator==(vec2i A, vec2i B)
-{
-    return (A.X == B.X && A.Y == B.Y);
-}
+inline vec2i Vec2I(i32 X, i32 Y) { vec2i Result = {}; Result.X = X; Result.Y = Y; return Result; }
+inline vec2i Vec2I() { return Vec2I(0, 0); }
+inline vec2i Vec2I(i32 Value) { return Vec2I(Value, Value); }
+inline vec2i Vec2I(vec2 V_F) { return Vec2I((int) V_F.X, (int) V_F.Y); }
+inline vec2 Vec2(vec2i V_I) { return Vec2((f32) V_I.X, (f32) V_I.Y); }
+inline vec2i operator+(vec2i A, vec2i B) { return Vec2I(A.X + B.X, A.Y + B.Y); }
+inline vec2i operator-(vec2i A, vec2i B) { return Vec2I(A.X - B.X, A.Y - B.Y); }
+inline vec2i operator-(vec2i V) { return Vec2I(-V.X, -V.Y); }
+inline vec2i operator*(vec2i A, vec2i B) { return Vec2I(A.X * B.X, A.Y * B.Y); }
+inline vec2i operator*(vec2i V, i32 I) { return Vec2I(V.X * I, V.Y * I); }
+inline vec2i operator*(vec2i V, f32 I) { return Vec2I((i32) (V.X * I), (i32) (V.Y * I)); }
+inline vec2i operator*(i32 I, vec2i V) { return Vec2I(V.X * I, V.Y * I); }
+inline vec2i operator*(f32 I, vec2i V) { return Vec2I((i32) (V.X * I), (i32) (V.Y * I)); }
+inline vec2i operator/(vec2i V, i32 I) { return Vec2I(V.X / I, V.Y / I); }
+inline vec2i operator/(vec2i V, f32 I) { return Vec2I((i32) (V.X / I), (i32) (V.Y / I)); }
+inline vec2i operator/(i32 I, vec2i V) { return Vec2I(I / V.X, I / V.Y); }
+inline vec2i operator/(f32 I, vec2i V) { return Vec2I((i32) (I / V.X), (i32) (I / V.Y)); }
+inline vec2i &operator+=(vec2i &V0, vec2i V1) { V0 = V0 + V1; return V0; }
+inline vec2i &operator-=(vec2i &V0, vec2i V1) { V0 = V0 - V1; return V0; }
+inline vec2i &operator*=(vec2i &V, int S) { V = V * S; return V; }
+inline vec2i &operator/=(vec2i &V, int S) { V = V / S; return V; }
+inline b32 operator==(vec2i A, vec2i B) { return (A.X == B.X && A.Y == B.Y); }
 
 // -------------------------------------------------------------------------------
 // VECTOR 3 INTEGER --------------------------------------------------------------
@@ -1453,74 +1356,14 @@ union vec3i
     i32 E[3];
 };
 
-inline vec3i
-Vec3I()
-{
-    vec3i Result = {};
-    return Result;
-}
-
-inline vec3i
-Vec3I(i32 X, i32 Y, i32 Z)
-{
-    vec3i Result = {};
-
-    Result.X = X;
-    Result.Y = Y;
-    Result.Z = Z;
-
-    return Result;
-}
-
-inline vec3i
-Vec3I(i32 Value)
-{
-    vec3i Result = Vec3I(Value, Value, Value);
-    return Result;
-}
-
-inline vec3i
-Vec3I(vec2i V)
-{
-    vec3i Result = Vec3I(V.X, V.Y, 0);
-    return Result;
-}
-
-inline vec2i
-Vec2I(vec3i V)
-{
-    vec2i Result = Vec2I(V.X, V.Y);
-    return Result;
-}
-
-inline b32
-Vec3IAreEqual(vec3i A, vec3i B)
-{
-    b32 Result = (A.X == B.X &&
-                  A.Y == B.Y &&
-                  A.Z == B.Z);
-    return Result;
-}
-
-inline vec3i
-operator+(vec3i A, vec3i B)
-{
-    vec3i Result = Vec3I(A.X + B.X, A.Y + B.Y, A.Z + B.Z);
-    return Result;
-}
-
-inline vec3i
-operator-(vec3i A, vec3i B)
-{
-    vec3i Result = Vec3I(A.X - B.X, A.Y - B.Y, A.Z - B.Z);
-    return Result;
-}
-
-inline vec3i
-operator*(vec3i A, vec3i B)
-{
-    vec3i Result = Vec3I(A.X * B.X, A.Y * B.Y, A.Z * B.Z);
-    return Result;
-}
+inline vec3i Vec3I(i32 X, i32 Y, i32 Z) { vec3i Result = {}; Result.X = X; Result.Y = Y; Result.Z = Z; return Result; }
+inline vec3i Vec3I() { return Vec3I(0, 0, 0); }
+inline vec3i Vec3I(i32 Value) { return Vec3I(Value, Value, Value); }
+inline vec3i Vec3I(vec2i V) { return Vec3I(V.X, V.Y, 0); }
+inline vec2i Vec2I(vec3i V) { return Vec2I(V.X, V.Y); }
+inline b32 operator==(vec3i A, vec3i B) { return (A.X == B.X && A.Y == B.Y && A.Z == B.Z); }
+inline vec3i operator+(vec3i A, vec3i B) { return Vec3I(A.X + B.X, A.Y + B.Y, A.Z + B.Z); }
+inline vec3i operator-(vec3i A, vec3i B) { return Vec3I(A.X - B.X, A.Y - B.Y, A.Z - B.Z); }
+inline vec3i operator*(vec3i A, vec3i B) { return Vec3I(A.X * B.X, A.Y * B.Y, A.Z * B.Z); }
 
 #endif
