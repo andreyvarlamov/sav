@@ -680,7 +680,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     // SECTION: Game logic
 
-    CalculateNextDestination(&GameState->World, Vec2I(1, 1), Vec2I(5, 5), &GameState->TransientArena);
+    static_p int PathGen = 0;
 
     b32 PlayerTookTurn = false;
     if (RequestedPlayerTurnSkip)
@@ -783,6 +783,13 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                     }
                 }
             }
+
+            if (KeyPressed(SDL_SCANCODE_SPACE))
+            {
+                PathGen++;
+            }
+
+            CalculateNextDestination(&GameState->World, Vec2I(1, 1), Vec2I(5, 5), &GameState->TransientArena, PathGen);
         }
         EndCameraMode();
 

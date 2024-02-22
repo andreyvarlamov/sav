@@ -128,4 +128,13 @@ GetTestEntityBlueprint(entity_type Type, u8 Glyph, color Color)
     return Blueprint;
 }
 
+inline void
+DrawRect(world *World, vec2i P, color Color)
+{
+    f32 X = (f32) P.X * World->TilePxW;
+    f32 Y = (f32) P.Y * World->TilePxH;
+    rect R = Rect(X, Y, (f32) World->TilePxW, (f32) World->TilePxH);
+    DrawRect(R, Color);
+}
+
 #endif

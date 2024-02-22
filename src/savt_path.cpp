@@ -112,11 +112,25 @@ NextPathNode(path_node **PathNode)
     }
 }
 
-vec2i
-CalculateNextDestination(world *World, vec2i A, vec2i B, memory_arena *TransientArena)
+static_g int GenIndex;
+static_g int GenMax;
+
+void
+CalculateNextDestination(world *World, vec2i A, vec2i B, memory_arena *TransientArena, int _GenMax)
 {
+    GenIndex = 0;
+    GenMax = _GenMax;
+    VisitedPCount = 0;
+    SortedPathNodeCount = 0;
+
     WorkArena = TransientArena;
     MemoryArena_Freeze(WorkArena);
+
+    if (GenIndex >= GenMax)
+    {
+        goto path_end;
+    }
+    GenIndex++;
 
     // NOTE: 1. Dijkstra
     AddPathNode(A, NULL, 0);
@@ -157,6 +171,26 @@ CalculateNextDestination(world *World, vec2i A, vec2i B, memory_arena *Transient
             }
         }
 
+        if (GenIndex >= GenMax)
+        {
+            for (int i = 0; i < SortedPathNodeCount; i++)
+            {
+                DrawRect(World, SortedPathNodes[i]->P, ColorAlpha(VA_BLACK, (u8) (((1.0f - (f32) i / SortedPathNodeCount)) * 255.0f)));
+            }
+            
+            int I = 0;
+            path_node *N = CurrentPathNode;
+            while (N)
+            {
+                DrawRect(World, N->P, I == 0 ? ColorAlpha(VA_GREEN, 200) : ColorAlpha(VA_BLUE, 100));
+                I++;
+                N = N->Parent;
+            }
+
+            goto path_end;
+        }
+        GenIndex++;
+
         Noop;
     }
     Assert(CurrentPathNode);
@@ -168,12 +202,15 @@ CalculateNextDestination(world *World, vec2i A, vec2i B, memory_arena *Transient
     {
         NodeAfterFirst = CurrentPathNode;
         CurrentPathNode = CurrentPathNode->Parent;
+        DrawRect(World, CurrentPathNode->P, ColorAlpha(VA_RED, 200));
     }
+    DrawRect(World, Destination->P, ColorAlpha(VA_GREEN, 200));
 
     // NOTE: 3. Return the next step
     vec2i NextDest = NodeAfterFirst->P;
 
+ path_end:
     MemoryArena_Unfreeze(WorkArena);
     
-    return NextDest;
+    // return NextDest;
 }
