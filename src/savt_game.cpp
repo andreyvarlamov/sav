@@ -545,12 +545,15 @@ GenerateWorld(game_state *GameState)
     AddEntity(World, Vec2I(3, 3), &TestBlueprint);
 }
 
+#include "savt_path.cpp"
+
 GAME_API void
 UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
 {
     game_state *GameState = (game_state *) GameMemory.Data;
 
     // SECTION: Init
+    
     if (!GameState->IsInitialized)
     {
         Assert(sizeof(game_state) < Megabytes(16));
@@ -636,11 +639,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
 
     // SECTION: First updates
-    MemoryArena_Reset(&GameState->TransientArena);
 
+    MemoryArena_Reset(&GameState->TransientArena);
     GameState->Camera.Offset = GetWindowSize() / 2.0f;
 
     // SECTION: Check inputs
+
     if (KeyPressed(SDL_SCANCODE_F11)) ToggleWindowBorderless();
     
     if (MouseWheel() != 0) CameraIncreaseLogZoomSteps(&GameState->Camera, MouseWheel());
@@ -675,6 +679,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     EndTextureMode();
 
     // SECTION: Game logic
+
+    CalculateNextDestination(&GameState->World, Vec2I(1, 1), Vec2I(5, 5), &GameState->TransientArena);
 
     b32 PlayerTookTurn = false;
     if (RequestedPlayerTurnSkip)
