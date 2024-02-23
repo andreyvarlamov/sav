@@ -87,6 +87,7 @@ struct game_state
 
     rect uiRect;
     sav_render_texture RTexUI;
+    sav_render_texture DebugOverlay;
 
     world World;
 
@@ -136,6 +137,15 @@ DrawRect(world *World, vec2i P, color Color)
     f32 Y = (f32) P.Y * World->TilePxH;
     rect R = Rect(X, Y, (f32) World->TilePxW, (f32) World->TilePxH);
     DrawRect(R, Color);
+}
+
+inline vec2i
+GetTilePFromPxP(world *World, vec2 PxP)
+{
+    vec2i TileP;
+    TileP.X = (int) (PxP.X / World->TilePxW);
+    TileP.Y = (int) (PxP.Y / World->TilePxH);
+    return TileP;
 }
 
 #endif

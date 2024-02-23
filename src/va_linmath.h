@@ -1342,6 +1342,7 @@ inline vec2i &operator-=(vec2i &V0, vec2i V1) { V0 = V0 - V1; return V0; }
 inline vec2i &operator*=(vec2i &V, int S) { V = V * S; return V; }
 inline vec2i &operator/=(vec2i &V, int S) { V = V / S; return V; }
 inline b32 operator==(vec2i A, vec2i B) { return (A.X == B.X && A.Y == B.Y); }
+inline int VecLengthSq(vec2i V) { return (V.X * V.X + V.Y * V.Y); }
 
 // -------------------------------------------------------------------------------
 // VECTOR 3 INTEGER --------------------------------------------------------------

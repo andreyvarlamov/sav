@@ -131,11 +131,13 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
 
     MemoryArena_Freeze(TrArena);
 
+#ifdef VIZ
     if (VizGen >= VizGenMax)
     {
         goto routine_end;
     }
     VizGen++;
+#endif
 
     path_state PathState;
     PathState.OpenSet = MemoryArena_PushArray(TrArena, OPEN_SET_MAX, int);
@@ -207,6 +209,7 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
             }
         }
 
+#ifdef VIZ
         if (VizGen >= VizGenMax)
         {
             int I = 0;
@@ -222,8 +225,7 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
             goto routine_end;
         }
         VizGen++;
-
-        Noop;
+#endif
     }
 
     Result.FoundPath = FoundPath;
@@ -254,7 +256,9 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
         MemoryArena_ResizePreviousPushArray(ResultArena, Count, vec2i);
     }
 
+#ifdef VIZ
  routine_end:
+#endif
     MemoryArena_Unfreeze(TrArena);
 
     return Result;

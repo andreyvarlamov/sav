@@ -308,8 +308,13 @@ DrawGround(game_state *GameState)
 entity *
 GetEntitiesAt(world *World, vec2i P)
 {
-    int WorldI = XYToIdx(P, World->Width);
-    return World->SpatialEntities[WorldI];
+    if (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height)
+    {
+        int WorldI = XYToIdx(P, World->Width);
+        return World->SpatialEntities[WorldI];
+    }
+
+    return NULL;
 }
 
 collision_info
@@ -448,7 +453,7 @@ MoveEntity(world *World, entity *Entity, vec2i NewP)
         {
             Col.Entity->Health -= 3;
             TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
-            if (Col.Entity->Health < 0.0f)
+            if (Col.Entity->Health <= 0.0f)
             {
                 TraceLog("Entity %p is dead.", Col.Entity);
             }
@@ -618,6 +623,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         GameState->uiRect = Rect(GetWindowSize());
         GameState->RTexUI = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, true);
+        GameState->DebugOverlay = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
         GameState->GlyphAtlas.T = SavLoadTexture("res/bloody_font.png");
@@ -737,6 +743,45 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
     }
 
+    if (KeyPressed(SDL_SCANCODE_B))
+    {
+        Breakpoint;
+    }
+
+    BeginTextureMode(GameState->DebugOverlay, Rect(0)); BeginCameraMode(&GameState->Camera); 
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
+
+        vec2 MouseP = GetMousePos();
+        vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
+        vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
+        entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
+        while (Entity)
+        {
+            if (Entity->Type == ENTITY_NPC)
+            {
+                path_result Path = CalculatePath(&GameState->World,
+                                                 Entity->Pos, GameState->PlayerEntity->Pos,
+                                                 &GameState->TrArenaA, &GameState->TrArenaB,
+                                                 0);
+
+                    
+                    for (int Step = 0; Step < Path.PathSteps; Step++)
+                    {
+                        DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
+                    }
+            }
+
+            Entity = Entity->Next;
+        }
+
+        // if (MousePressed(SDL_BUTTON_LEFT))
+        // {
+        //     TraceLog("%d, %d", MouseTileP.X, MouseTileP.Y);
+        // }
+    }
+    EndCameraMode(); EndTextureMode();
+
     if (PlayerTookTurn)
     {
         for (int i = 0; i < GameState->World.EntityUsedCount; i++)
@@ -744,6 +789,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             entity *Entity = GameState->World.Entities + i;
             if (Entity->Type == ENTITY_NPC)
             {
+#if 0
                 int ShouldMove = GetRandomValue(0, 12);
             
                 if (ShouldMove >= 6)
@@ -774,10 +820,24 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 
                         default: break;
                     }
-
+                    
                     MoveEntity(&GameState->World, Entity, NewEntityP);
                 }
-               
+#else
+                if (VecLengthSq(GameState->PlayerEntity->Pos - Entity->Pos) < 49)
+                {
+                    path_result Path = CalculatePath(&GameState->World,
+                                                     Entity->Pos, GameState->PlayerEntity->Pos,
+                                                     &GameState->TrArenaA, &GameState->TrArenaB,
+                                                     0);
+
+                    if (Path.FoundPath && Path.Path)
+                    {
+                        vec2i NewEntityP = Path.Path[0];
+                        MoveEntity(&GameState->World, Entity, NewEntityP);
+                    }
+                }
+#endif
             }
         }
     }
@@ -823,35 +883,11 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                     }
                 }
             }
-
-            // NOTE: Path test
-            {
-                if (KeyPressedOrRepeat(SDL_SCANCODE_SPACE))
-                {
-                    PathGen++;
-                }
-
-                vec2i Start = Vec2I(17, 13);
-                vec2i End = Vec2I(5, 10);
-                // vec2i End = Vec2I(16, 13);
-                // vec2i End = Vec2I(17, 13);
-                DrawRect(&GameState->World, Start, VA_WHITE);
-                DrawRect(&GameState->World, End, VA_BLACK);
-                path_result Path = CalculatePath(&GameState->World,
-                                                 Start, End,
-                                                 &GameState->TrArenaA, &GameState->TrArenaB,
-                                                 PathGen);
-
-                for (int i = 0; i < Path.PathSteps; i++)
-                {
-                    DrawRect(&GameState->World, Path.Path[i], ((i < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
-                }
-
-                Noop;
-            }
         }
         EndCameraMode();
 
+        DrawTexture(GameState->DebugOverlay.Texture, Rect(GetWindowSize()), VA_WHITE);
+        
         DrawTexture(GameState->RTexUI.Texture, GameState->uiRect, VA_WHITE);
     }
     EndDraw();
