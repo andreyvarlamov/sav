@@ -9,208 +9,253 @@ static_g vec2i DIRECTIONS[] = {
     Vec2I(-1, -1)
 };
 
-struct path_node
+enum { OPEN_SET_MAX = 1024, PATH_MAX = 512 };
+
+struct path_state
 {
-    vec2i P;
-    path_node *Parent;
-    f32 AccumCost;
-    // f32 SqDistToDest;
+    int *OpenSet;
+    int OpenSetCount;
+
+    int *CameFrom;
+    f32 *GScores;
+    f32 *FScores;
+    int MapSize;
 };
 
-static_g memory_arena *WorkArena;
-
-enum { PATH_NODE_MAX = 256 };
-
-static_g vec2i VisitedPs[PATH_NODE_MAX];
-static_g int VisitedPCount;
-static_g path_node *SortedPathNodes[PATH_NODE_MAX];
-static_g int SortedPathNodeCount;
-
-void
-AddPathNode(vec2i P, path_node *Parent, f32 Cost)
+f32
+GetHeuristic(vec2i Start, vec2i End)
 {
-    // NOTE: Parent can be null, only if this is the first point in path processed
-    Assert(Parent || SortedPathNodeCount == 0);
-
-    // NOTE: If the node for this position already exists, check if the new path to the node is lower cost,
-    //       and if so replace it.
-    for (int i = 0; i < SortedPathNodeCount; i++)
-    {
-        path_node *N = SortedPathNodes[i];
-        if (N->P == P)
-        {
-            f32 NewCost = Parent->AccumCost + Cost;
-            if (NewCost < N->AccumCost)
-            {
-                N->Parent = Parent;
-                N->AccumCost = NewCost;
-            }
-            return;
-        }
-    }
-
-    Assert(SortedPathNodeCount < PATH_NODE_MAX);
-
-    // NOTE: For a yet untraversed P, add a new node and calculate its cost based on its parent's cost
-    path_node *NewNode = MemoryArena_PushStruct(WorkArena, path_node);
-    NewNode->P = P;
-    NewNode->Parent = Parent;
-    NewNode->AccumCost = Parent ? (Parent->AccumCost + Cost) : Cost;
-
-    // NOTE: Find a place in the sorted path nodes where this node with a given cost should be
-    int NewNodeI;
-    for (NewNodeI = SortedPathNodeCount - 1; NewNodeI >= 0; NewNodeI--)
-    {
-        path_node *N = SortedPathNodes[NewNodeI];
-
-        if (N->AccumCost < NewNode->AccumCost)
-        {
-            break;
-        }
-    }
-    NewNodeI++;
-
-    // NOTE: Shift all nodes that are greater cost than current one to the right
-    for (int i = SortedPathNodeCount - 1; i >= NewNodeI; i--)
-    {
-        SortedPathNodes[i+1] = SortedPathNodes[i];
-    }
-    SortedPathNodeCount++;
-
-    // NOTE: Store the pointer to the node in the sorted path nodes
-    SortedPathNodes[NewNodeI] = NewNode;
+    #if 1
+    // NOTE: Sq Dist. Really unadmissible. Fast but very unoptimal path.
+    f32 dX = (f32) (End.X - Start.X);
+    f32 dY = (f32) (End.Y - Start.Y);
+    return dX*dX + dY*dY;
+    #elif 1
+    // NOTE: Manhattan. Slightly unadmissible. Fast ish, somewhat optimal path.
+    return AbsF((f32) ((End.X - Start.X) + (End.Y - Start.Y)));
+    #else
+    // NOTE: Euclidian distance. Admissible. Slow calculation, way more iterations and guaranteed optimal path.
+    f32 dX = (f32) (End.X - Start.X);
+    f32 dY = (f32) (End.Y - Start.Y);
+    return SqrtF(dX*dX + dY*dY);
+    #endif
 }
 
 b32
-NextPathNode(path_node **PathNode)
+PopLowestScoreFromOpenSet(path_state *PathState, int *LowestScoreIdx)
 {
-    if (SortedPathNodeCount > 0)
+    // NOTE: One of the first optimizations that could be done here is to convert this to a min heap
+    if (PathState->OpenSetCount > 0)
     {
-        // NOTE: If there are any path nodes in the priority queue, return the lowest cost one and
-        //       shift the rest to the left
-        path_node *NextPathNode = SortedPathNodes[0];
-        for (int i = 0; i < SortedPathNodeCount - 1; i++)
+        f32 LowestScore = FLT_MAX;
+        int LowestScoreOpenSetI = 0;
+        for (int OpenSetI = 0; OpenSetI < PathState->OpenSetCount; OpenSetI++)
         {
-            SortedPathNodes[i] = SortedPathNodes[i+1];
-        }
-        SortedPathNodeCount--;
+            int Idx = PathState->OpenSet[OpenSetI];
 
-        if (VisitedPCount < PATH_NODE_MAX)
+            if (PathState->FScores[Idx] < LowestScore)
+            {
+                LowestScore = PathState->FScores[Idx];
+                LowestScoreOpenSetI = OpenSetI;
+                *LowestScoreIdx = Idx;
+            }
+        }
+
+        for (int OpenSetI = LowestScoreOpenSetI; OpenSetI < PathState->OpenSetCount - 1; OpenSetI++)
         {
-            // NOTE: Set the node position as already visited, so we don't return to it from other tiles
-            VisitedPs[VisitedPCount++] = NextPathNode->P;
+            PathState->OpenSet[OpenSetI] = PathState->OpenSet[OpenSetI + 1];
         }
-        else InvalidCodePath;
-        
-
-        *PathNode = NextPathNode;
+        PathState->OpenSetCount--;
         return true;
     }
-    else
+
+    return false;
+}
+
+b32
+IsInOpenSet(path_state *PathState, int Idx)
+{
+    for (int i = 0; i < PathState->OpenSetCount; i++)
     {
-        return false;
+        if (PathState->OpenSet[i] == Idx)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+void
+AddToOpenSet(path_state *PathState, int Idx)
+{
+    if (!IsInOpenSet(PathState, Idx))
+    {
+        PathState->OpenSet[PathState->OpenSetCount++] = Idx;
     }
 }
 
-static_g int GenIndex;
-static_g int GenMax;
-
 void
-CalculateNextDestination(world *World, vec2i A, vec2i B, memory_arena *TransientArena, int _GenMax)
+GetNeighbors(vec2i Pos, world *World,
+             vec2i *Neighbors, b32 *DiagonalNeighbors, int *NeighborCount)
 {
-    GenIndex = 0;
-    GenMax = _GenMax;
-    VisitedPCount = 0;
-    SortedPathNodeCount = 0;
-
-    WorkArena = TransientArena;
-    MemoryArena_Freeze(WorkArena);
-
-    if (GenIndex >= GenMax)
+    *NeighborCount = 0;
+    
+    for (int Dir = 0; Dir < 8; Dir++)
     {
-        goto path_end;
-    }
-    GenIndex++;
+        vec2i Neighbor = Pos + DIRECTIONS[Dir];
 
-    // NOTE: 1. Dijkstra
-    AddPathNode(A, NULL, 0);
-
-    path_node *CurrentPathNode = NULL;
-    while (NextPathNode(&CurrentPathNode))
-    {
-        if (CurrentPathNode->P == B)
+        if (Neighbor.X >= 0 && Neighbor.X < World->Width &&
+            Neighbor.Y >= 0 && Neighbor.Y < World->Height)
         {
+            DiagonalNeighbors[*NeighborCount] = (Dir % 2 == 1);
+            Neighbors[*NeighborCount] = Neighbor;
+            (*NeighborCount)++;
+        }
+    }
+}
+
+struct path_result
+{
+    b32 FoundPath;
+    vec2i *Path;
+    int PathSteps;
+};
+
+path_result
+CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memory_arena *ResultArena,  int VizGenMax)
+{
+    int VizGen = 0;
+    path_result Result = {};
+
+    MemoryArena_Freeze(TrArena);
+
+    if (VizGen >= VizGenMax)
+    {
+        goto routine_end;
+    }
+    VizGen++;
+
+    path_state PathState;
+    PathState.OpenSet = MemoryArena_PushArray(TrArena, OPEN_SET_MAX, int);
+    PathState.OpenSetCount = 0;
+
+    PathState.MapSize = World->Width * World->Height;
+    // NOTE: For unbounded maps, or just big maps, these could be hash tables
+    PathState.CameFrom = MemoryArena_PushArray(TrArena, PathState.MapSize, int);
+    PathState.GScores = MemoryArena_PushArray(TrArena, PathState.MapSize, f32);
+    PathState.FScores = MemoryArena_PushArray(TrArena, PathState.MapSize, f32);
+    for (int i = 0; i < PathState.MapSize; i++)
+    {
+        PathState.GScores[i] = FLT_MAX;
+        PathState.FScores[i] = FLT_MAX;
+    }
+
+    int StartIdx = XYToIdx(Start, World->Width);
+    PathState.OpenSet[PathState.OpenSetCount++] = StartIdx;
+    PathState.CameFrom[StartIdx] = 0;
+    PathState.GScores[StartIdx] = 0;
+    PathState.FScores[StartIdx] = GetHeuristic(Start, End);
+
+    int EndIdx = XYToIdx(End, World->Width);
+
+    if (StartIdx == EndIdx)
+    {
+        Result.FoundPath = true;
+        return Result;
+    }
+
+    b32 FoundPath = false;
+    int CurrentIdx;
+    while (PopLowestScoreFromOpenSet(&PathState, &CurrentIdx))
+    {
+        if (CurrentIdx == EndIdx)
+        {
+            FoundPath = true;
             break;
         }
-        
-        for (int Dir = 0; Dir < 8; Dir++)
+
+        vec2i Neighbors[8];
+        b32 DiagonalNeighbors[8];
+        int NeighborCount;
+        GetNeighbors(IdxToXY(CurrentIdx, World->Width), World, Neighbors, DiagonalNeighbors, &NeighborCount);
+
+        for (int i = 0; i < NeighborCount; i++)
         {
-            vec2i D = DIRECTIONS[Dir];
-
-            vec2i TestP = CurrentPathNode->P + D;
-
-            b32 AlreadyVisited = false;
-            for (int i = 0; i < VisitedPCount; i++)
-            {
-                if (VisitedPs[i] == TestP)
-                {
-                    AlreadyVisited = true;
-                    break;
-                }
-            }
-
-            if (!AlreadyVisited)
-            {
-                collision_info Col = CheckCollisions(World, TestP);
-
-                if (!Col.Collided)
-                {
-                    // NOTE: Cost for diagonals is sqrt(2)
-                    AddPathNode(TestP, CurrentPathNode, (Dir % 2 == 0) ? 1.0f : 1.414f);
-                }
-            }
-        }
-
-        if (GenIndex >= GenMax)
-        {
-            for (int i = 0; i < SortedPathNodeCount; i++)
-            {
-                DrawRect(World, SortedPathNodes[i]->P, ColorAlpha(VA_BLACK, (u8) (((1.0f - (f32) i / SortedPathNodeCount)) * 255.0f)));
-            }
+            vec2i Neighbor = Neighbors[i];
+            b32 Diagonal = DiagonalNeighbors[i];
+            f32 ThisGScore = PathState.GScores[CurrentIdx] + (Diagonal ? 1.414f : 1.0f);
             
-            int I = 0;
-            path_node *N = CurrentPathNode;
-            while (N)
+            int NeighborIdx = XYToIdx(Neighbor, World->Width);
+            if (ThisGScore < PathState.GScores[NeighborIdx])
             {
-                DrawRect(World, N->P, I == 0 ? ColorAlpha(VA_GREEN, 200) : ColorAlpha(VA_BLUE, 100));
-                I++;
-                N = N->Parent;
-            }
+                // TODO: This can be optimized by caching results of collisions.
+                // Right now if a cell gets rejected because there is a collision, it will recheck collisions again
+                // from another currentIdx position.
+                // In addition, if a cell has already been discovered with a higher GScore, we know that there was no collision,
+                // but this is gonna check collisions for that cell again.
+                b32 Collided = (NeighborIdx == EndIdx) ? false : CheckCollisions(World, Neighbor).Collided;
+                if (!Collided)
+                {
+                    PathState.CameFrom[NeighborIdx] = CurrentIdx;
+                    PathState.GScores[NeighborIdx] = ThisGScore;
+                    PathState.FScores[NeighborIdx] = ThisGScore + GetHeuristic(Neighbor, End);
 
-            goto path_end;
+                    AddToOpenSet(&PathState, NeighborIdx);
+                }
+            }
         }
-        GenIndex++;
+
+        if (VizGen >= VizGenMax)
+        {
+            int I = 0;
+            int PrevIdx = CurrentIdx;
+            while (PrevIdx != StartIdx && I < PATH_MAX)
+            {
+                DrawRect(World, IdxToXY(PrevIdx, World->Width), I == 0 ? ColorAlpha(VA_YELLOW, 200) : ColorAlpha(VA_BLUE, 100));
+                I++;
+                PrevIdx = PathState.CameFrom[PrevIdx];
+            }
+            DrawRect(World, Start, ColorAlpha(VA_RED, 200));
+
+            goto routine_end;
+        }
+        VizGen++;
 
         Noop;
     }
-    Assert(CurrentPathNode);
-    path_node *Destination = CurrentPathNode;
 
-    // NOTE: 2. Trace the path back to start
-    path_node *NodeAfterFirst = CurrentPathNode;
-    while (CurrentPathNode->Parent)
-    {
-        NodeAfterFirst = CurrentPathNode;
-        CurrentPathNode = CurrentPathNode->Parent;
-        DrawRect(World, CurrentPathNode->P, ColorAlpha(VA_RED, 200));
-    }
-    DrawRect(World, Destination->P, ColorAlpha(VA_GREEN, 200));
-
-    // NOTE: 3. Return the next step
-    vec2i NextDest = NodeAfterFirst->P;
-
- path_end:
-    MemoryArena_Unfreeze(WorkArena);
+    Result.FoundPath = FoundPath;
     
-    // return NextDest;
+    if (FoundPath)
+    {
+        Result.Path = MemoryArena_PushArray(ResultArena, PATH_MAX, vec2i);
+
+        int Count = 0;
+        // NOTE: Reconstitute path backwards
+        int PrevIdx = EndIdx;
+        while (PrevIdx != StartIdx && Count < PATH_MAX)
+        {
+            Result.Path[Count++] = IdxToXY(PrevIdx, World->Width);
+            PrevIdx = PathState.CameFrom[PrevIdx];
+        }
+
+        Assert(Count < PATH_MAX);
+
+        // NOTE: And then reverse it
+        for (int i = 0; i < Count / 2; i++)
+        {
+            vec2i Temp = Result.Path[i];
+            Result.Path[i] = Result.Path[Count - 1  - i];
+            Result.Path[Count - 1  - i] = Temp;
+        }
+        Result.PathSteps = Count;
+        MemoryArena_ResizePreviousPushArray(ResultArena, Count, vec2i);
+    }
+
+ routine_end:
+    MemoryArena_Unfreeze(TrArena);
+
+    return Result;
 }

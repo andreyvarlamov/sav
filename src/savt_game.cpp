@@ -17,6 +17,34 @@
 
 static_g int gWorldWidth = 24;
 static_g int gWorldHeight = 24;
+
+static_g u8 gWorldWalls[] = {
+    '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','#','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','#','#','.','.','.','.','.','#','#','#','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','#','.','.','#','#','#','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','#','#','#','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','#','#','#','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
+    '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
+};
+
 static_g u8 gWorldTiles[] = {
     46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
     46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
@@ -53,11 +81,11 @@ UpdateCameraToWorldTarget(camera_2d *Camera, world World, vec2i WorldP)
 }
 
 sav_texture
-GenerateVignette(memory_arena *TransientArena)
+GenerateVignette(memory_arena *TrArenaA)
 {
     int VigDim = 512;
-    MemoryArena_Freeze(TransientArena);
-    u32 *VigData = MemoryArena_PushArray(TransientArena, VigDim*VigDim, u32);
+    MemoryArena_Freeze(TrArenaA);
+    u32 *VigData = MemoryArena_PushArray(TrArenaA, VigDim*VigDim, u32);
     f32 FadeOutEndR = VigDim / 2.0f;
     f32 FadeOutStartR = FadeOutEndR - 256.0f;
     for (int i = 0; i < VigDim*VigDim; i++)
@@ -93,7 +121,7 @@ GenerateVignette(memory_arena *TransientArena)
     sav_texture Tex = SavLoadTextureFromData(VigData, VigDim, VigDim);
     SavSetTextureWrapMode(Tex, SAV_CLAMP_TO_EDGE);
     
-    MemoryArena_Unfreeze(TransientArena);
+    MemoryArena_Unfreeze(TrArenaA);
 
     return Tex;
 }
@@ -116,14 +144,14 @@ DrawGround(game_state *GameState)
 
             for (int GroundVariant = 1; GroundVariant <= 3; GroundVariant++)
             {
-                MemoryArena_Freeze(&GameState->TransientArena);
+                MemoryArena_Freeze(&GameState->TrArenaA);
                 
                 int TileCount = GameState->World.Width * GameState->World.Height;
-                vec3 *VertPositions = MemoryArena_PushArray(&GameState->TransientArena, TileCount * 4, vec3);
-                vec4 *VertTexCoords = MemoryArena_PushArrayAndZero(&GameState->TransientArena, TileCount * 4, vec4);
-                vec4 *VertColors = MemoryArena_PushArrayAndZero(&GameState->TransientArena, TileCount * 4, vec4);
+                vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec3);
+                vec4 *VertTexCoords = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, TileCount * 4, vec4);
+                vec4 *VertColors = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, TileCount * 4, vec4);
                 int CurrentVert = 0;
-                u32 *VertIndices = MemoryArena_PushArray(&GameState->TransientArena, TileCount * 6, u32);
+                u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 6, u32);
                 int CurrentIndex = 0;
 
                 for (int WorldI = 0; WorldI < GameState->World.Width * GameState->World.Height; WorldI++)
@@ -173,7 +201,7 @@ DrawGround(game_state *GameState)
                     
                 DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
 
-                MemoryArena_Unfreeze(&GameState->TransientArena);
+                MemoryArena_Unfreeze(&GameState->TrArenaA);
             }
 
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -197,18 +225,18 @@ DrawGround(game_state *GameState)
                 {
                     glStencilFunc(GL_EQUAL, GroundVariant, 0xFF);
 
-                    MemoryArena_Freeze(&GameState->TransientArena);
+                    MemoryArena_Freeze(&GameState->TrArenaA);
                     
-                    vec3 *VertPositions = MemoryArena_PushArray(&GameState->TransientArena, GameState->GroundPointCount * 4, vec3);
-                    vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TransientArena, GameState->GroundPointCount * 4, vec4);
-                    vec4 *VertColors = MemoryArena_PushArray(&GameState->TransientArena, GameState->GroundPointCount * 4, vec4);
+                    vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec3);
+                    vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec4);
+                    vec4 *VertColors = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec4);
                     vec4 C = ColorV4(VA_WHITE);
                     for (int i = 0; i < GameState->GroundPointCount * 4; i++)
                     {
                         VertColors[i] = C;
                     }
                     int CurrentVert = 0;
-                    u32 *VertIndices = MemoryArena_PushArray(&GameState->TransientArena, GameState->GroundPointCount * 6, u32);
+                    u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 6, u32);
                     int CurrentIndex = 0;
                     
                     for (int GroundPointI = 0; GroundPointI < GameState->GroundPointCount; GroundPointI++)
@@ -263,7 +291,7 @@ DrawGround(game_state *GameState)
 
                     DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
 
-                    MemoryArena_Unfreeze(&GameState->TransientArena);
+                    MemoryArena_Unfreeze(&GameState->TrArenaA);
                 }
 
                 glStencilMask(0xFF); // NOTE: So that stencil mask can be cleared glClear
@@ -498,7 +526,8 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.Tex = GameState->StoneWallTex;
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING);
-        
+
+    #if 0
     for (int X = 0; X < World->Width; X++)
     {
         AddEntity(World, Vec2I(X, 0), &WallBlueprint);
@@ -510,6 +539,16 @@ GenerateWorld(game_state *GameState)
         AddEntity(World, Vec2I(0, Y), &WallBlueprint);
         AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint);
     }
+    #else
+    for (int i = 0; i < ArrayCount(gWorldWalls); i++)
+    {
+        if (gWorldWalls[i] == '#')
+        {
+            vec2i P = IdxToXY(i, World->Width);
+            AddEntity(World, P, &WallBlueprint);
+        }
+    }
+    #endif
 
     entity PlayerBlueprint = {};
     PlayerBlueprint.Type = ENTITY_PLAYER;
@@ -563,7 +602,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->ResourceArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
-        GameState->TransientArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+        GameState->TrArenaA = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+        GameState->TrArenaB = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
 
         GameState->GroundShader = BuildCustomShader("res/ground.vs", "res/ground.fs");
         BeginShaderMode(GameState->GroundShader);
@@ -585,7 +625,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->GlyphAtlas.GlyphPxW = 48;
         GameState->GlyphAtlas.GlyphPxH = 72;
 
-        GameState->VigTex = GenerateVignette(&GameState->TransientArena);
+        GameState->VigTex = GenerateVignette(&GameState->TrArenaA);
         GameState->GroundBrushTex = SavLoadTexture("res/GroundBrushes4.png");
         GameState->GroundBrushRect = Rect(GameState->GroundBrushTex.Width, GameState->GroundBrushTex.Width);
         GameState->StoneWallTex = SavLoadTexture("res/PurgStoneWall2.png");
@@ -640,7 +680,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     // SECTION: First updates
 
-    MemoryArena_Reset(&GameState->TransientArena);
+    MemoryArena_Reset(&GameState->TrArenaA);
     GameState->Camera.Offset = GetWindowSize() / 2.0f;
 
     // SECTION: Check inputs
@@ -674,7 +714,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    10,
                    VA_MAROON,
                    true, ColorAlpha(VA_BLACK, 128),
-                   &GameState->TransientArena);
+                   &GameState->TrArenaA);
     }
     EndTextureMode();
 
@@ -784,12 +824,31 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 }
             }
 
-            if (KeyPressed(SDL_SCANCODE_SPACE))
+            // NOTE: Path test
             {
-                PathGen++;
-            }
+                if (KeyPressedOrRepeat(SDL_SCANCODE_SPACE))
+                {
+                    PathGen++;
+                }
 
-            CalculateNextDestination(&GameState->World, Vec2I(1, 1), Vec2I(5, 5), &GameState->TransientArena, PathGen);
+                vec2i Start = Vec2I(17, 13);
+                vec2i End = Vec2I(5, 10);
+                // vec2i End = Vec2I(16, 13);
+                // vec2i End = Vec2I(17, 13);
+                DrawRect(&GameState->World, Start, VA_WHITE);
+                DrawRect(&GameState->World, End, VA_BLACK);
+                path_result Path = CalculatePath(&GameState->World,
+                                                 Start, End,
+                                                 &GameState->TrArenaA, &GameState->TrArenaB,
+                                                 PathGen);
+
+                for (int i = 0; i < Path.PathSteps; i++)
+                {
+                    DrawRect(&GameState->World, Path.Path[i], ((i < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
+                }
+
+                Noop;
+            }
         }
         EndCameraMode();
 

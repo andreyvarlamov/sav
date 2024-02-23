@@ -72,7 +72,8 @@ struct game_state
     memory_arena RootArena;
     memory_arena WorldArena;
     memory_arena ResourceArena;
-    memory_arena TransientArena;
+    memory_arena TrArenaA;
+    memory_arena TrArenaB;
 
     sav_font *Font;
     glyph_atlas GlyphAtlas;
