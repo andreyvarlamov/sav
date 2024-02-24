@@ -15,6 +15,12 @@ AbsF(f32 Value)
     return fabs(Value);
 }
 
+inline int
+Abs(int Value)
+{
+    return abs(Value);
+}
+
 inline f32
 SqrtF(f32 Value)
 {

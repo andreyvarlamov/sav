@@ -100,6 +100,7 @@ struct game_state
 
 inline vec2i IdxToXY(int I, int Width) { return Vec2I(I % Width, I / Width); }
 inline int XYToIdx(vec2i P, int Width) { return P.Y * Width + P.X; }
+inline int XYToIdx(int X, int Y, int Width) { return Y * Width + X; }
 inline b32 CheckFlags(u32 Flags, u32 Mask) { return Flags & Mask; }
 inline void SetFlags(u32 *Flags, u32 Mask) { *Flags |= Mask; }
 inline void ClearFlags(u32 *Flags, u32 Mask) { *Flags &= ~Mask; }

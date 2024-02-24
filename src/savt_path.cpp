@@ -25,12 +25,12 @@ struct path_state
 f32
 GetHeuristic(vec2i Start, vec2i End)
 {
-    #if 1
+    #if 0
     // NOTE: Sq Dist. Really unadmissible. Fast but very unoptimal path.
     f32 dX = (f32) (End.X - Start.X);
     f32 dY = (f32) (End.Y - Start.Y);
     return dX*dX + dY*dY;
-    #elif 1
+    #elif 0
     // NOTE: Manhattan. Slightly unadmissible. Fast ish, somewhat optimal path.
     return AbsF((f32) ((End.X - Start.X) + (End.Y - Start.Y)));
     #else
@@ -165,6 +165,7 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
     if (StartIdx == EndIdx)
     {
         Result.FoundPath = true;
+        MemoryArena_Unfreeze(TrArena);
         return Result;
     }
 
@@ -262,4 +263,87 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
     MemoryArena_Unfreeze(TrArena);
 
     return Result;
+}
+
+void
+TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap)
+{
+    int X1 = A.X;
+    int Y1 = A.Y;
+    int X2 = B.X;
+    int Y2 = B.Y;
+    
+    int DeltaX = X2 - X1;
+    int IX = ((DeltaX > 0) - (DeltaX < 0));
+    DeltaX = Abs(DeltaX) << 1;
+
+    int DeltaY = Y2 - Y1;
+    int IY = ((DeltaY > 0) - (DeltaY < 0));
+    DeltaY = Abs(DeltaY) << 1;
+
+    VisibilityMap[XYToIdx(X1, Y1, World->Width)] = 1;
+
+    if (DeltaX >= DeltaY)
+    {
+        int Error = (DeltaY - (DeltaY >> 1));
+
+        while (X1 != X2)
+        {
+            if ((Error > 0) || (!Error && (IX > 0)))
+            {
+                Error -= DeltaX;
+                Y1 += IY;
+            }
+
+            Error += DeltaY;
+            X1 += IX;
+
+            VisibilityMap[XYToIdx(X1, Y1, World->Width)] = 1;
+
+            if (IsTileOpaque(World, Vec2I(X1, Y1)))
+            {
+                break;
+            }
+        }
+    }
+    else
+    {
+        int Error = (DeltaX - (DeltaY >> 1));
+
+        while (Y1 != Y2)
+        {
+            if ((Error > 0) || (!Error && (IY > 0)))
+            {
+                Error -= DeltaY;
+                X1 += IX;
+            }
+
+            Error += DeltaX;
+            Y1 += IY;
+
+            VisibilityMap[XYToIdx(X1, Y1, World->Width)] = 1;
+
+            if (IsTileOpaque(World, Vec2I(X1, Y1)))
+            {
+                break;
+            }
+        }
+    }
+
+}
+
+void
+CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap)
+{
+    for (int X = 0; X < World->Width; X++)
+    {
+        TraceLineBresenham(World, Pos, Vec2I(X, 0), VisibilityMap);
+        TraceLineBresenham(World, Pos, Vec2I(X, World->Height - 1), VisibilityMap);
+    }
+
+    for (int Y = 0; Y < World->Height; Y++)
+    {
+        TraceLineBresenham(World, Pos, Vec2I(0, Y), VisibilityMap);
+        TraceLineBresenham(World, Pos, Vec2I(World->Width - 1, Y), VisibilityMap);
+    }
 }

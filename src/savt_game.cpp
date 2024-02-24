@@ -305,10 +305,16 @@ DrawGround(game_state *GameState)
     glDisable(GL_STENCIL_TEST);
 }
 
+inline b32
+IsPInBounds(world *World, vec2i P)
+{
+    return (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height);
+}
+
 entity *
 GetEntitiesAt(world *World, vec2i P)
 {
-    if (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height)
+    if(IsPInBounds(World, P))
     {
         int WorldI = XYToIdx(P, World->Width);
         return World->SpatialEntities[WorldI];
@@ -320,36 +326,75 @@ GetEntitiesAt(world *World, vec2i P)
 collision_info
 CheckCollisions(world *World, vec2i P)
 {
-    entity *EntityHead = GetEntitiesAt(World, P);
-
-    b32 FoundBlocking = false;
-
-    entity *Entity;
-    for (Entity = EntityHead; Entity; Entity = Entity->Next)
+    collision_info CI;
+    
+    if (IsPInBounds(World, P))
     {
-        // NOTE: Right now the assumption is that only one entity is blocking per tile
-        // (Otherwise how did an entity move to a blocked tile?)
-        // if (EntityExists(Entity) && Entity->Pos == P && CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
-        if (EntityExists(Entity) && Entity->Pos == P)
+        entity *HeadEntity = GetEntitiesAt(World, P);
+
+        b32 FoundBlocking = false;
+
+        entity *Entity;
+        for (Entity = HeadEntity; Entity; Entity = Entity->Next)
         {
-            if (CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+            // NOTE: Right now the assumption is that only one entity is blocking per tile
+            // (Otherwise how did an entity move to a blocked tile?)
+            // if (EntityExists(Entity) && Entity->Pos == P && CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+            if (EntityExists(Entity) && Entity->Pos == P)
             {
-                FoundBlocking = true;
-                break;
-            }
-            else
-            {
-                Noop;
+                if (CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+                {
+                    FoundBlocking = true;
+                    break;
+                }
+                else
+                {
+                    Noop;
+                }
             }
         }
+
+        CI.Collided = FoundBlocking;
+        CI.Entity = Entity;
+    }
+    else
+    {
+        CI.Collided = true;
+        CI.Entity = NULL;
+        return CI;
     }
 
-    Assert(FoundBlocking == (Entity != NULL));
-    
-    collision_info CI;
-    CI.Collided = FoundBlocking;
-    CI.Entity = Entity;
     return CI;
+}
+
+b32
+IsTileOpaque(world *World, vec2i P)
+{
+    if (IsPInBounds(World, P))
+    {
+        entity *HeadEntity = GetEntitiesAt(World, P);
+
+        b32 FoundOpaque = false;
+
+        entity *Entity;
+        for (Entity = HeadEntity; Entity; Entity = Entity->Next)
+        {
+            if (EntityExists(Entity) && Entity->Pos == P)
+            {
+                if (CheckFlags(Entity->Flags, ENTITY_IS_OPAQUE))
+                {
+                    FoundOpaque = true;
+                    break;
+                }
+            }
+        }
+
+        return FoundOpaque;
+    }
+    else
+    {
+        return true;
+    }
 }
 
 void
@@ -405,6 +450,11 @@ RemoveEntityFromSpatial(world *World, vec2i Pos, entity *Entity)
 entity *
 FindNextFreeEntitySlot(world *World)
 {
+    // NOTE: This will hit even if there are spaces based on tight count
+    Assert(World->EntityUsedCount < World->EntityMaxCount);
+
+    // TODO: Handle more than a given amount of entities. Need a bucket array or something like that.
+    // TODO: Do the assert or allocate another bucket only if entities are tightly packed and it's out of space
     entity *Entity = World->Entities + World->EntityTightCount;
     while (Entity->Type > 0)
     {
@@ -445,31 +495,36 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity)
 b32
 MoveEntity(world *World, entity *Entity, vec2i NewP)
 {
-    collision_info Col = CheckCollisions(World, NewP);
-
-    if (Col.Collided)
+    if (Entity->Type > 0)
     {
-        if (Col.Entity)
+        collision_info Col = CheckCollisions(World, NewP);
+
+        if (Col.Collided)
         {
-            Col.Entity->Health -= 3;
-            TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
-            if (Col.Entity->Health <= 0.0f)
+            if (Col.Entity)
             {
-                TraceLog("Entity %p is dead.", Col.Entity);
+                Col.Entity->Health -= 3;
+                TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
+                if (Col.Entity->Health <= 0.0f)
+                {
+                    TraceLog("Entity %p is dead.", Col.Entity);
+                }
             }
+
+            return false;
         }
+        else
+        {
+            RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+            AddEntityToSpatial(World, NewP, Entity);
 
-        return false;
+            Entity->Pos = NewP;
+
+            return true;
+        }
     }
-    else
-    {
-        RemoveEntityFromSpatial(World, Entity->Pos, Entity);
-        AddEntityToSpatial(World, NewP, Entity);
 
-        Entity->Pos = NewP;
-
-        return true;
-    }
+    return false;
 }
 
 void
@@ -513,7 +568,7 @@ GenerateWorld(game_state *GameState)
     World->TilePxW = GameState->GlyphAtlas.GlyphPxW;
     World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
     
-    World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, ArrayCount(gWorldTiles), u8);
+    World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
 
     World->EntityUsedCount = 0;
     World->EntityMaxCount = ENTITY_MAX_COUNT;
@@ -530,7 +585,7 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.IsTex = true;
     WallBlueprint.Tex = GameState->StoneWallTex;
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
-    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING);
+    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
     #if 0
     for (int X = 0; X < World->Width; X++)
@@ -544,7 +599,7 @@ GenerateWorld(game_state *GameState)
         AddEntity(World, Vec2I(0, Y), &WallBlueprint);
         AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint);
     }
-    #else
+    #elif 1
     for (int i = 0; i < ArrayCount(gWorldWalls); i++)
     {
         if (gWorldWalls[i] == '#')
@@ -709,20 +764,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerTurnSkip = true;
 
     // TODO: SHOULD UI BE DRAWN BEFORE GAME LOGIC, SO WE GET DON'T HAVE TO PROCESS BUTTON PRESSES ON THE NEXT FRAME???????
-    BeginTextureMode(GameState->RTexUI, GameState->uiRect);
-    {
-        ClearBackground(ColorAlpha(VA_WHITE, 0));
-
-        DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
-                   GameState->Font,
-                   GameState->Font->PointSize,
-                   10,
-                   10,
-                   VA_MAROON,
-                   true, ColorAlpha(VA_BLACK, 128),
-                   &GameState->TrArenaA);
-    }
-    EndTextureMode();
 
     // SECTION: Game logic
 
@@ -748,13 +789,14 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         Breakpoint;
     }
 
+    vec2 MouseP = GetMousePos();
+    vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
+    vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
+
     BeginTextureMode(GameState->DebugOverlay, Rect(0)); BeginCameraMode(&GameState->Camera); 
     {
         ClearBackground(ColorAlpha(VA_WHITE, 0));
 
-        vec2 MouseP = GetMousePos();
-        vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
-        vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
         entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
         while (Entity)
         {
@@ -766,19 +808,25 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                                                  0);
 
                     
-                    for (int Step = 0; Step < Path.PathSteps; Step++)
-                    {
-                        DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
-                    }
+                for (int Step = 0; Step < Path.PathSteps; Step++)
+                {
+                    DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
+                }
             }
 
             Entity = Entity->Next;
         }
 
-        // if (MousePressed(SDL_BUTTON_LEFT))
-        // {
-        //     TraceLog("%d, %d", MouseTileP.X, MouseTileP.Y);
-        // }
+        u8 *VisibilityTest = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, GameState->World.Width * GameState->World.Height, u8);
+        CalculateLineOfSight(&GameState->World, GameState->PlayerEntity->Pos, VisibilityTest);
+
+        for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
+        {
+            if (VisibilityTest[i] == 0)
+            {
+                DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLACK, 240));
+            }
+        }
     }
     EndCameraMode(); EndTextureMode();
 
@@ -858,6 +906,31 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     // SECTION: Render
     
+    BeginTextureMode(GameState->RTexUI, GameState->uiRect);
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
+
+        DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
+                   GameState->Font,
+                   GameState->Font->PointSize,
+                   10,
+                   10,
+                   VA_MAROON,
+                   true, ColorAlpha(VA_BLACK, 128),
+                   &GameState->TrArenaA);
+
+        DrawString(TextFormat("%d, %d", MouseTileP.X, MouseTileP.Y),
+                   GameState->Font,
+                   GameState->Font->PointSize,
+                   10,
+                   60,
+                   VA_MAROON,
+                   true, ColorAlpha(VA_BLACK, 128),
+                   &GameState->TrArenaA);
+                   
+    }
+    EndTextureMode();
+
     DrawGround(GameState);
     
     BeginDraw();
