@@ -310,8 +310,8 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 GlState->DefaultTextureGlid = DefaultTexture.Glid;
 
                 GlState->DefaultShader = BuildBasicShader();
-                GlState->MaxVertexCount = 4096;
-                GlState->MaxIndexCount = 16384;
+                GlState->MaxVertexCount = 65536;
+                GlState->MaxIndexCount = 393216;
                 PrepareGpuData(&GlState->DefaultVBO,
                                &GlState->DefaultVAO,
                                &GlState->DefaultEBO,
@@ -871,7 +871,7 @@ EndDraw()
 void
 PrepareGpuData(u32 *VBO, u32 *VAO, u32 *EBO, int MaxVertCount, int MaxIndexCount)
 {
-    size_t BytesPerVertex = (3 + 2 + 4) * sizeof(float);
+    size_t BytesPerVertex = (3 + 4 + 4) * sizeof(float);
     
     glGenVertexArrays(1, VAO);
     Assert(*VAO);

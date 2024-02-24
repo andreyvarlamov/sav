@@ -74,26 +74,26 @@ DrawGround(game_state *GameState)
 
                 for (int WorldI = 0; WorldI < GameState->World.Width * GameState->World.Height; WorldI++)
                 {
-                    switch (GameState->World.Tiles[WorldI])
-                    {
-                        case '#':
-                        case 46:
-                        {
-                            if (GroundVariant != 1) continue;
-                        } break;
+                    //switch (GameState->World.Tiles[WorldI])
+                    //{
+                    //    case '#':
+                    //    case 46:
+                    //    {
+                    //        if (GroundVariant != 1) continue;
+                    //    } break;
 
-                        case 254:
-                        {
-                            if (GroundVariant != 2) continue;
-                        } break;
+                    //    case 254:
+                    //    {
+                    //        if (GroundVariant != 2) continue;
+                    //    } break;
 
-                        case 247:
-                        {
-                            if (GroundVariant != 3) continue;
-                        } break;
+                    //    case 247:
+                    //    {
+                    //        if (GroundVariant != 3) continue;
+                    //    } break;
 
-                        default: continue;
-                    }
+                    //    default: continue;
+                    //}
                         
                     vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
                     rect Dest = GetWorldDestRect(GameState->World, WorldP);
@@ -139,7 +139,7 @@ DrawGround(game_state *GameState)
                 BindTextureSlot(1, GameState->GroundBrushTex);
                 BindTextureSlot(2, GameState->VigTex);
                 
-                for (int GroundVariant = 1; GroundVariant <= 3; GroundVariant++)
+                for (int GroundVariant = 1; GroundVariant <= 1; GroundVariant++)
                 {
                     glStencilFunc(GL_EQUAL, GroundVariant, 0xFF);
 

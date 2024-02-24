@@ -34,11 +34,16 @@ MemoryArena_PushSize_(memory_arena *Arena, size_t Size)
     return Result;
 }
 
+#include <cstring>
+
 inline void *
 MemoryArena_PushSizeAndZero_(memory_arena *Arena, size_t Size)
 {
     void *Base = MemoryArena_PushSize_(Arena, Size);
 
+#if 1
+    memset(Base, 0, Size);
+#else
     u8 *Cursor = (u8 *) Base;
     for (size_t ByteIndex = 0;
          ByteIndex < Size;
@@ -46,6 +51,7 @@ MemoryArena_PushSizeAndZero_(memory_arena *Arena, size_t Size)
     {
         *Cursor++ = 0;
     }
+#endif
     
     return Base;
 }

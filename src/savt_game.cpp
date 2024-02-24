@@ -15,8 +15,8 @@
 
 #include <cstdio>
 
-static_g int gWorldWidth = 24;
-static_g int gWorldHeight = 24;
+static_g int gWorldWidth = 100;
+static_g int gWorldHeight = 100;
 
 static_g u8 gWorldWalls[] = {
     '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
@@ -265,6 +265,14 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
     vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
 
+    if (MousePressed(SDL_BUTTON_LEFT))
+    {
+        rect R = GetWorldCameraRect(&GameState->Camera);
+        TraceLog("%f, %f, %f, %f", R.X, R.Y, R.Width, R.Height);
+    }
+
+    int Test = GL_MAX_ELEMENTS_VERTICES;
+
     BeginTextureMode(GameState->DebugOverlay, Rect(0)); BeginCameraMode(&GameState->Camera); 
     {
         ClearBackground(ColorAlpha(VA_WHITE, 0));
@@ -296,7 +304,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         {
             if (VisibilityTest[i] == 0)
             {
-                DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLACK, 240));
+                // DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLACK, 240));
             }
         }
     }

@@ -128,8 +128,23 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\savt_game.cpp" />
+    <ClCompile Include="..\..\..\src\savt_ground.cpp" />
     <ClCompile Include="..\..\..\src\savt_platform.cpp" />
+    <ClCompile Include="..\..\..\src\savt_world.cpp" />
     <ClCompile Include="..\..\..\src\sav_lib.cpp" />
+    <ClCompile Include="..\..\..\src\sav_lib_int.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\savt_game.h" />
+    <ClInclude Include="..\..\..\src\sav_lib.h" />
+    <ClInclude Include="..\..\..\src\va_colors.h" />
+    <ClInclude Include="..\..\..\src\va_linmath.h" />
+    <ClInclude Include="..\..\..\src\va_math.h" />
+    <ClInclude Include="..\..\..\src\va_memarena.h" />
+    <ClInclude Include="..\..\..\src\va_rect.h" />
+    <ClInclude Include="..\..\..\src\va_sstring.h" />
+    <ClInclude Include="..\..\..\src\va_types.h" />
+    <ClInclude Include="..\..\..\src\va_util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

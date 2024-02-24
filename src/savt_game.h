@@ -149,4 +149,14 @@ GetTilePFromPxP(world *World, vec2 PxP)
     return TileP;
 }
 
+inline rect
+GetWorldCameraRect(camera_2d *Camera)
+{
+    vec2 WorldMin = CameraScreenToWorld(Camera, Vec2(0));
+    vec2 WorldMax = CameraScreenToWorld(Camera, GetWindowSize());
+                                        
+    return RectMinMax(WorldMin, WorldMax);
+}
+    
+
 #endif
