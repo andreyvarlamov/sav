@@ -1,3 +1,342 @@
+// SECTION: Entity management and spatial partition
+
+entity *
+GetEntitiesAt(world *World, vec2i P)
+{
+    if(IsPInBounds(World, P))
+    {
+        int WorldI = XYToIdx(P, World->Width);
+        return World->SpatialEntities[WorldI];
+    }
+
+    return NULL;
+}
+
+collision_info
+CheckCollisions(world *World, vec2i P)
+{
+    collision_info CI;
+    
+    if (IsPInBounds(World, P))
+    {
+        entity *HeadEntity = GetEntitiesAt(World, P);
+
+        b32 FoundBlocking = false;
+
+        entity *Entity;
+        for (Entity = HeadEntity; Entity; Entity = Entity->Next)
+        {
+            // NOTE: Right now the assumption is that only one entity is blocking per tile
+            // (Otherwise how did an entity move to a blocked tile?)
+            // if (EntityExists(Entity) && Entity->Pos == P && CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+            if (EntityExists(Entity) && Entity->Pos == P)
+            {
+                if (CheckFlags(Entity->Flags, ENTITY_IS_BLOCKING))
+                {
+                    FoundBlocking = true;
+                    break;
+                }
+                else
+                {
+                    Noop;
+                }
+            }
+        }
+
+        CI.Collided = FoundBlocking;
+        CI.Entity = Entity;
+    }
+    else
+    {
+        CI.Collided = true;
+        CI.Entity = NULL;
+        return CI;
+    }
+
+    return CI;
+}
+
+b32
+IsTileOpaque(world *World, vec2i P)
+{
+    if (IsPInBounds(World, P))
+    {
+        entity *HeadEntity = GetEntitiesAt(World, P);
+
+        b32 FoundOpaque = false;
+
+        entity *Entity;
+        for (Entity = HeadEntity; Entity; Entity = Entity->Next)
+        {
+            if (EntityExists(Entity) && Entity->Pos == P)
+            {
+                if (CheckFlags(Entity->Flags, ENTITY_IS_OPAQUE))
+                {
+                    FoundOpaque = true;
+                    break;
+                }
+            }
+        }
+
+        return FoundOpaque;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+void
+AddEntityToSpatial(world *World, vec2i Pos, entity *Entity)
+{
+    int WorldI = XYToIdx(Pos, World->Width);
+
+    entity *HeadEntity = World->SpatialEntities[WorldI];
+    if (HeadEntity)
+    {
+        Entity->Next = HeadEntity;
+    }
+
+    World->SpatialEntities[WorldI] = Entity;
+}
+
+void
+RemoveEntityFromSpatial(world *World, vec2i Pos, entity *Entity)
+{
+    int WorldI = XYToIdx(Pos, World->Width);
+
+    entity *HeadEntity = World->SpatialEntities[WorldI];
+
+    Assert(HeadEntity);
+
+    entity *PrevEntity = NULL;
+    entity *SearchEntity = HeadEntity;
+    while (SearchEntity)
+    {
+        if (SearchEntity == Entity)
+        {
+            break;
+        }
+
+        PrevEntity = SearchEntity;
+        SearchEntity = SearchEntity->Next;
+    }
+
+    Assert(SearchEntity);
+        
+    if (PrevEntity)
+    {
+        PrevEntity->Next = Entity->Next;
+    }
+    else
+    {
+        World->SpatialEntities[WorldI] = Entity->Next;
+    }
+
+    Entity->Next = NULL;
+}
+
+entity *
+FindNextFreeEntitySlot(world *World)
+{
+    // NOTE: This will hit even if there are spaces based on tight count
+    Assert(World->EntityUsedCount < World->EntityMaxCount);
+
+    // TODO: Handle more than a given amount of entities. Need a bucket array or something like that.
+    // TODO: Do the assert or allocate another bucket only if entities are tightly packed and it's out of space
+    entity *Entity = World->Entities + World->EntityTightCount;
+    while (Entity->Type > 0)
+    {
+        World->EntityTightCount++;
+        Entity++;
+    }
+    
+    World->EntityTightCount++;
+    
+    entity *NextNextFreeEntity = Entity + 1;
+    while (NextNextFreeEntity->Type > 0)
+    {
+        World->EntityTightCount++;
+        NextNextFreeEntity++;
+    }
+
+    if (World->EntityTightCount > World->EntityUsedCount)
+    {
+        World->EntityUsedCount = World->EntityTightCount;
+    }
+
+    return Entity;
+}
+
+entity *
+AddEntity(world *World, vec2i Pos, entity *CopyEntity)
+{
+    entity *Entity = FindNextFreeEntitySlot(World);
+    
+    *Entity = *CopyEntity;
+    Entity->Pos = Pos;
+
+    AddEntityToSpatial(World, Pos, Entity);
+
+    return Entity;
+}
+
+b32
+MoveEntity(world *World, entity *Entity, vec2i NewP)
+{
+    if (Entity->Type > 0)
+    {
+        collision_info Col = CheckCollisions(World, NewP);
+
+        if (Col.Collided)
+        {
+            if (Col.Entity)
+            {
+                Col.Entity->Health -= 3;
+                TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
+                if (Col.Entity->Health <= 0.0f)
+                {
+                    TraceLog("Entity %p is dead.", Col.Entity);
+                }
+            }
+
+            return false;
+        }
+        else
+        {
+            RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+            AddEntityToSpatial(World, NewP, Entity);
+
+            Entity->Pos = NewP;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void
+DeleteEntity(world *World, entity *Entity)
+{
+    RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+
+    Entity->Type = ENTITY_NONE;
+    
+    int EntityI = (int) (Entity - World->Entities);
+    Assert(EntityI < World->EntityUsedCount);
+    
+    if (EntityI < World->EntityTightCount)
+    {
+        World->EntityTightCount = EntityI;
+    }
+}
+
+b32
+ValidateEntitySpatialPartition(world *World)
+{
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        entity *HeadEntity = World->SpatialEntities[i];
+
+        for (entity *Entity = HeadEntity; Entity; Entity = Entity->Next)
+        {
+            Assert(EntityExists(Entity));
+        }
+    }
+
+    return true;
+}
+
+// SECTION: World gen
+
+void
+GenerateWorld(game_state *GameState)
+{
+    world *World = &GameState->World;
+    World->Width = gWorldWidth;
+    World->Height = gWorldHeight;
+    World->TilePxW = GameState->GlyphAtlas.GlyphPxW;
+    World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
+    
+    World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
+
+    World->EntityUsedCount = 0;
+    World->EntityMaxCount = ENTITY_MAX_COUNT;
+    World->Entities = MemoryArena_PushArray(&GameState->WorldArena, World->EntityMaxCount, entity);
+    World->SpatialEntities = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, entity *);
+
+    for (int i = 0; i < ArrayCount(gWorldTiles); i++)
+    {
+        GameState->World.Tiles[i] = gWorldTiles[i];
+    }
+
+    entity WallBlueprint = {};
+    WallBlueprint.Type = ENTITY_STATIC;
+    WallBlueprint.IsTex = true;
+    WallBlueprint.Tex = GameState->StoneWallTex;
+    WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
+    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
+
+    #if 0
+    for (int X = 0; X < World->Width; X++)
+    {
+        AddEntity(World, Vec2I(X, 0), &WallBlueprint);
+        AddEntity(World, Vec2I(X, World->Height - 1), &WallBlueprint);
+    }
+
+    for (int Y = 1; Y < World->Height - 1; Y++)
+    {
+        AddEntity(World, Vec2I(0, Y), &WallBlueprint);
+        AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint);
+    }
+    #elif 1
+    for (int i = 0; i < ArrayCount(gWorldWalls); i++)
+    {
+        if (gWorldWalls[i] == '#')
+        {
+            vec2i P = IdxToXY(i, World->Width);
+            AddEntity(World, P, &WallBlueprint);
+        }
+    }
+    #endif
+
+    entity PlayerBlueprint = {};
+    PlayerBlueprint.Type = ENTITY_PLAYER;
+    PlayerBlueprint.IsTex = false;
+    PlayerBlueprint.Color = VA_LIGHTBLUE;
+    PlayerBlueprint.Glyph = '@';
+    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 30.0f;
+    SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
+    GameState->PlayerEntity = AddEntity(World, Vec2I(1, 1), &PlayerBlueprint);
+    
+    entity EnemyBlueprint = {};
+    EnemyBlueprint.Type = ENTITY_NPC;
+    EnemyBlueprint.IsTex = false;
+    EnemyBlueprint.Color = VA_CORAL;
+    EnemyBlueprint.Glyph = 1 + 9*16;
+    EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
+    SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
+    
+    int AttemptsToAdd = 15;
+    for (int i = 0; i < AttemptsToAdd; i++)
+    {
+        int X = GetRandomValue(0, World->Width);
+        int Y = GetRandomValue(0, World->Height);
+
+        vec2i P = Vec2I(X, Y);
+        if (!CheckCollisions(World, P).Collided)
+        {
+            AddEntity(World, P, &EnemyBlueprint);
+        }
+    }
+
+    entity TestBlueprint = GetTestEntityBlueprint(ENTITY_ITEM_PICKUP, 2 + 9*16, VA_PINK);
+    AddEntity(World, Vec2I(3, 3), &TestBlueprint);
+}
+
+// SECTION: Pathing
+
 static_g vec2i DIRECTIONS[] = {
     Vec2I( 0, -1),
     Vec2I( 1, -1),
@@ -264,6 +603,8 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
 
     return Result;
 }
+
+// SECTION: Line of sight
 
 void
 TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap, int MaxRangeSq)
