@@ -266,7 +266,7 @@ CalculatePath(world *World, vec2i Start, vec2i End, memory_arena *TrArena, memor
 }
 
 void
-TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap)
+TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap, int MaxRangeSq)
 {
     int X1 = A.X;
     int Y1 = A.Y;
@@ -300,6 +300,11 @@ TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap)
 
             VisibilityMap[XYToIdx(X1, Y1, World->Width)] = 1;
 
+            if ((X1 - A.X)*(X1 - A.X) + (Y1 - A.Y)*(Y1 - A.Y) >= MaxRangeSq)
+            {
+                break;
+            }
+
             if (IsTileOpaque(World, Vec2I(X1, Y1)))
             {
                 break;
@@ -323,6 +328,11 @@ TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap)
 
             VisibilityMap[XYToIdx(X1, Y1, World->Width)] = 1;
 
+            if ((X1 - A.X)*(X1 - A.X) + (Y1 - A.Y)*(Y1 - A.Y) >= MaxRangeSq)
+            {
+                break;
+            }
+            
             if (IsTileOpaque(World, Vec2I(X1, Y1)))
             {
                 break;
@@ -333,17 +343,19 @@ TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap)
 }
 
 void
-CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap)
+CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
 {
+    int MaxRangeSq = MaxRange*MaxRange;
+    
     for (int X = 0; X < World->Width; X++)
     {
-        TraceLineBresenham(World, Pos, Vec2I(X, 0), VisibilityMap);
-        TraceLineBresenham(World, Pos, Vec2I(X, World->Height - 1), VisibilityMap);
+        TraceLineBresenham(World, Pos, Vec2I(X, 0), VisibilityMap, MaxRangeSq);
+        TraceLineBresenham(World, Pos, Vec2I(X, World->Height - 1), VisibilityMap, MaxRangeSq);
     }
 
     for (int Y = 0; Y < World->Height; Y++)
     {
-        TraceLineBresenham(World, Pos, Vec2I(0, Y), VisibilityMap);
-        TraceLineBresenham(World, Pos, Vec2I(World->Width - 1, Y), VisibilityMap);
+        TraceLineBresenham(World, Pos, Vec2I(0, Y), VisibilityMap, MaxRangeSq);
+        TraceLineBresenham(World, Pos, Vec2I(World->Width - 1, Y), VisibilityMap, MaxRangeSq);
     }
 }
