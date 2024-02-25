@@ -42,10 +42,13 @@ struct entity
     f32 MaxHealth;
     u32 Flags;
 
+    int ViewRange;
+    u8 *FieldOfView;
+
     entity *Next;
 };
 
-enum { ENTITY_MAX_COUNT = 1000 };
+enum { ENTITY_MAX_COUNT = 4096 };
 
 struct world
 {

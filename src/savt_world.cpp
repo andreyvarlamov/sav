@@ -1,3 +1,5 @@
+#include <cstring> // memset
+
 // SECTION: Entity management and spatial partition
 
 entity *
@@ -10,6 +12,24 @@ GetEntitiesAt(world *World, vec2i P)
     }
 
     return NULL;
+}
+
+void
+GetAllCharacterEntities(world *World, memory_arena *TrArena, entity ***CharEntities, int *Count)
+{
+    *CharEntities = MemoryArena_PushArray(TrArena, World->EntityUsedCount, entity *);
+    *Count = 0;
+    
+    for (int i = 0; i < World->EntityUsedCount; i++)
+    {
+        entity *Entity = World->Entities + i;
+        if (Entity->Type == ENTITY_NPC || Entity->Type == ENTITY_PLAYER)
+        {
+            (*CharEntities)[(*Count)++] = Entity;
+        }
+    }
+    
+    MemoryArena_ResizePreviousPushArray(TrArena, *Count, entity *);
 }
 
 collision_info
@@ -150,9 +170,8 @@ FindNextFreeEntitySlot(world *World)
         World->EntityTightCount++;
         Entity++;
     }
-    
+
     World->EntityTightCount++;
-    
     entity *NextNextFreeEntity = Entity + 1;
     while (NextNextFreeEntity->Type > 0)
     {
@@ -169,11 +188,19 @@ FindNextFreeEntitySlot(world *World)
 }
 
 entity *
-AddEntity(world *World, vec2i Pos, entity *CopyEntity)
+AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 {
     entity *Entity = FindNextFreeEntitySlot(World);
-    
+
     *Entity = *CopyEntity;
+    
+    b32 NeedFOV = (Entity->Type == ENTITY_NPC || Entity->Type == ENTITY_PLAYER);
+    if (NeedFOV && Entity->FieldOfView == NULL)
+    {
+        // TODO: Allocate only for the entity max range rect
+        Entity->FieldOfView = MemoryArena_PushArray(WorldArena, World->Width * World->Height, u8);
+    }
+    
     Entity->Pos = Pos;
 
     AddEntityToSpatial(World, Pos, Entity);
@@ -266,7 +293,7 @@ GenerateWorld(game_state *GameState)
     World->EntityMaxCount = ENTITY_MAX_COUNT;
     World->Entities = MemoryArena_PushArray(&GameState->WorldArena, World->EntityMaxCount, entity);
     World->SpatialEntities = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, entity *);
-
+    
     for (int i = 0; i < ArrayCount(gWorldTiles); i++)
     {
         World->Tiles[i] = gWorldTiles[i];
@@ -283,14 +310,14 @@ GenerateWorld(game_state *GameState)
     #if 0
     for (int X = 0; X < World->Width; X++)
     {
-        AddEntity(World, Vec2I(X, 0), &WallBlueprint);
-        AddEntity(World, Vec2I(X, World->Height - 1), &WallBlueprint);
+        AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
+        AddEntity(World, Vec2I(X, World->Height - 1), &WallBlueprint, &GameState->WorldArena);
     }
 
     for (int Y = 1; Y < World->Height - 1; Y++)
     {
-        AddEntity(World, Vec2I(0, Y), &WallBlueprint);
-        AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint);
+        AddEntity(World, Vec2I(0, Y), &WallBlueprint, &GameState->WorldArena);
+        AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint, &GameState->WorldArena);
     }
     #elif 1
     for (int i = 0; i < ArrayCount(gWorldWalls); i++)
@@ -298,7 +325,7 @@ GenerateWorld(game_state *GameState)
         if (gWorldWalls[i] == '#')
         {
             vec2i P = IdxToXY(i, World->Width);
-            AddEntity(World, P, &WallBlueprint);
+            AddEntity(World, P, &WallBlueprint, &GameState->WorldArena);
         }
     }
     #endif
@@ -307,18 +334,20 @@ GenerateWorld(game_state *GameState)
     PlayerBlueprint.Type = ENTITY_PLAYER;
     PlayerBlueprint.Color = VA_LIGHTBLUE;
     PlayerBlueprint.Glyph = '@';
-    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 30.0f;
+    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 10000.0f;
+    PlayerBlueprint.ViewRange = 7;
     SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
-    GameState->PlayerEntity = AddEntity(World, Vec2I(1, 1), &PlayerBlueprint);
+    GameState->PlayerEntity = AddEntity(World, Vec2I(1, 1), &PlayerBlueprint, &GameState->WorldArena);
     
     entity EnemyBlueprint = {};
     EnemyBlueprint.Type = ENTITY_NPC;
     EnemyBlueprint.Color = VA_CORAL;
     EnemyBlueprint.Glyph = 1 + 9*16;
     EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
+    EnemyBlueprint.ViewRange = 5;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
     
-    int AttemptsToAdd = 10;
+    int AttemptsToAdd = 15;
     for (int i = 0; i < AttemptsToAdd; i++)
     {
         int X = GetRandomValue(0, World->Width);
@@ -327,15 +356,15 @@ GenerateWorld(game_state *GameState)
         vec2i P = Vec2I(X, Y);
         if (!CheckCollisions(World, P).Collided)
         {
-            AddEntity(World, P, &EnemyBlueprint);
+            AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
         }
     }
 
     entity TestBlueprint = GetTestEntityBlueprint(ENTITY_ITEM_PICKUP, 2 + 9*16, VA_PINK);
-    AddEntity(World, Vec2I(3, 3), &TestBlueprint);
+    AddEntity(World, Vec2I(3, 3), &TestBlueprint, &GameState->WorldArena);
 
     entity E = GetTestEntityBlueprint(ENTITY_STATIC, '$', VA_WHITE);
-    entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E);
+    entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E, &GameState->WorldArena);
 }
 
 // SECTION: Pathing
@@ -701,4 +730,12 @@ CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
         TraceLineBresenham(World, Pos, Vec2I(0, Y), VisibilityMap, MaxRangeSq);
         TraceLineBresenham(World, Pos, Vec2I(World->Width - 1, Y), VisibilityMap, MaxRangeSq);
     }
+}
+
+b32
+IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
+{
+    int WorldI = XYToIdx(Pos, World->Width);
+
+    return FieldOfVision[WorldI];
 }

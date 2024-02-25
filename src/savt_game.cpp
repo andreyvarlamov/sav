@@ -635,8 +635,16 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         Breakpoint;
     }
 
-    u8 *VisibilityTest = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, GameState->World.Width * GameState->World.Height, u8);
-    CalculateLineOfSight(&GameState->World, GameState->PlayerEntity->Pos, VisibilityTest, 7);
+    // TODO: Optimize when we recalculate field of view
+    for (int i = 0; i < GameState->World.EntityUsedCount; i++)
+    {
+        entity *Entity = GameState->World.Entities + i;
+        if ((Entity->Type == ENTITY_PLAYER || Entity->Type == ENTITY_NPC) && Entity->FieldOfView != NULL && Entity->ViewRange > 1)
+        {
+            memset(Entity->FieldOfView, 0, GameState->World.Width * GameState->World.Height * sizeof(Entity->FieldOfView[0]));
+            CalculateLineOfSight(&GameState->World, Entity->Pos, Entity->FieldOfView, Entity->ViewRange);
+        }
+    }
 
     for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
     {
@@ -645,7 +653,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
         }
 
-        if (VisibilityTest[i] == 1)
+        if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
         {
             GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
         }
@@ -660,8 +668,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             {
 #if 0
                 int ShouldMove = GetRandomValue(0, 12); if (ShouldMove >= 6) {int RandDir = GetRandomValue(0, 4); vec2i NewEntityP = Entity->Pos; switch (RandDir) {case 0: {NewEntityP += Vec2I(0, -1);} break; case 1: {NewEntityP += Vec2I(1, 0);} break; case 2: {NewEntityP += Vec2I(0, 1);} break; case 3: {NewEntityP += Vec2I(-1, 0);} break; default: break;} MoveEntity(&GameState->World, Entity, NewEntityP);}
-#elif 0
-                if (VecLengthSq(GameState->PlayerEntity->Pos - Entity->Pos) < 49)
+#elif 1
+                if (Entity->FieldOfView != NULL && IsInFOV(&GameState->World, Entity->FieldOfView, GameState->PlayerEntity->Pos))
                 {
                     path_result Path = CalculatePath(&GameState->World,
                                                      Entity->Pos, GameState->PlayerEntity->Pos,
@@ -680,6 +688,16 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
 
     // SECTION: End of frame logic
+
+#ifdef SAV_DEBUG    
+    entity **CharEntities;
+    int Count;
+    GetAllCharacterEntities(&GameState->World, &GameState->TrArenaA, &CharEntities, &Count);
+
+    Noop;
+
+    Assert(ValidateEntitySpatialPartition(&GameState->World));
+#endif
     
     for (int i = 0; i < GameState->World.EntityUsedCount; i++)
     {
@@ -691,7 +709,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
     }
 
-    Assert(ValidateEntitySpatialPartition(&GameState->World));
 
     vec2 MouseP = GetMousePos();
     vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
@@ -707,6 +724,17 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
         while (Entity)
         {
+            if (Entity->FieldOfView)
+            {
+                for (int i = 0; i < GameState->World.Width * GameState->World.Width; i++)
+                {
+                    if (Entity->FieldOfView[i] == 1)
+                    {
+                        DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLUE, 150));
+                    }
+                }
+            }
+            
             if (Entity->Type == ENTITY_NPC)
             {
                 path_result Path = CalculatePath(&GameState->World,
