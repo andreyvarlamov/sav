@@ -106,6 +106,12 @@ enum tex_wrap_mode
     SAV_REPEAT
 };
 
+enum tex_filter_mode
+{
+    SAV_LINEAR,
+    SAV_NEAREST
+};
+
 SAV_API game_memory AllocGameMemory(size_t Size);
 SAV_API void DumpGameMemory(game_memory GameMemory);
 SAV_API void ReloadGameMemoryDump(game_memory GameMemory);
@@ -120,6 +126,7 @@ SAV_API void Quit();
 SAV_API void SetWindowTitle(const char *Title);
 SAV_API vec2 GetWindowSize();
 SAV_API vec2 GetWindowOrigSize();
+SAV_API b32 WindowSizeChanged();
 SAV_API void SetWindowBorderless(b32 Borderless);
 SAV_API void ToggleWindowBorderless();
 
@@ -196,7 +203,9 @@ SAV_API sav_texture SavLoadTexture(const char *Path);
 SAV_API sav_texture SavLoadTextureFromImage(sav_image Image);
 SAV_API sav_texture SavLoadTextureFromData(void *ImageData, int Width, int Height);
 SAV_API void SavSetTextureWrapMode(sav_texture Texture, tex_wrap_mode WrapMode);
+SAV_API void SavSetTextureFilterMode(sav_texture Texture, tex_filter_mode FilterMode);
 SAV_API sav_render_texture SavLoadRenderTexture(int Width, int Height, b32 FilterNearest);
+SAV_API void SavDeleteRenderTexture(sav_render_texture *RenderTexture);
 SAV_API void BeginTextureMode(sav_render_texture RenderTexture, rect RenderTextureScreenRect);
 SAV_API void EndTextureMode();
 

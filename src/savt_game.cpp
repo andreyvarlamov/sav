@@ -15,8 +15,8 @@
 
 #include <cstdio>
 
-static_g int gWorldWidth = 100;
-static_g int gWorldHeight = 100;
+static_g int gWorldWidth = 24;
+static_g int gWorldHeight = 24;
 
 static_g u8 gWorldWalls[] = {
     '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
@@ -45,7 +45,7 @@ static_g u8 gWorldWalls[] = {
     '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
 };
 
-#if 0
+#if 1
 static_g u8 gWorldTiles[] = {
     46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
     46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
@@ -101,6 +101,8 @@ static_g u8 gWorldTiles[] = {
 };
 #endif
 
+enum { DARKNESS_UNSEEN = 255, DARKNESS_SEEN = 180, DARKNESS_IN_VIEW = 0 };
+
 void
 UpdateCameraToWorldTarget(camera_2d *Camera, world World, vec2i WorldP)
 {
@@ -115,8 +117,373 @@ IsPInBounds(world *World, vec2i P)
     return (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height);
 }
 
-#include "savt_ground.cpp"
 #include "savt_world.cpp"
+
+sav_texture
+GenerateVignette(memory_arena *TrArenaA)
+{
+    int VigDim = 512;
+    MemoryArena_Freeze(TrArenaA);
+    u32 *VigData = MemoryArena_PushArray(TrArenaA, VigDim*VigDim, u32);
+    f32 FadeOutEndR = VigDim / 2.0f;
+    f32 FadeOutStartR = FadeOutEndR - 256.0f;
+    for (int i = 0; i < VigDim*VigDim; i++)
+    {
+        vec2i P = IdxToXY(i, VigDim);
+            
+        u32 *Pixel = VigData + i;
+
+        vec2 PFromCenter = (Vec2(P) + Vec2(0.5f)) - Vec2(VigDim / 2.0f);
+
+        f32 R = SqrtF(PFromCenter.X * PFromCenter.X + PFromCenter.Y * PFromCenter.Y);
+
+        color C;
+        if (R > FadeOutEndR)
+        {
+            C = ColorAlpha(VA_BLACK, 0);
+        }
+        else if (R > FadeOutStartR && R <= FadeOutEndR)
+        {
+            f32 T = 1.0f - (R - FadeOutStartR) / (FadeOutEndR - FadeOutStartR);
+            f32 A = EaseOutQuad(T);
+            C = ColorAlpha(VA_BLACK, (u8) (A * 255.0f));
+        }
+        else
+        {
+            C = ColorAlpha(VA_BLACK, 255);
+        }
+            
+        *Pixel = C.C32;
+    }
+    // SavSaveImage("temp/vig.png", VigData, VigDim, VigDim, false, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+
+    sav_texture Tex = SavLoadTextureFromData(VigData, VigDim, VigDim);
+    SavSetTextureWrapMode(Tex, SAV_CLAMP_TO_EDGE);
+    
+    MemoryArena_Unfreeze(TrArenaA);
+
+    return Tex;
+}
+
+void
+DrawGround(game_state *GameState)
+{
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+    BeginDraw();
+    {
+        BeginCameraMode(&GameState->Camera);
+        {
+            glStencilMask(0xFF);
+
+            ClearBackground(VA_BLACK);
+            
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+            for (int GroundVariant = 1; GroundVariant <= 3; GroundVariant++)
+            {
+                MemoryArena_Freeze(&GameState->TrArenaA);
+                
+                int TileCount = GameState->World.Width * GameState->World.Height;
+                vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec3);
+                vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+                vec4 *VertColors = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+                int CurrentVert = 0;
+                u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 6, u32);
+                int CurrentIndex = 0;
+
+                for (int WorldI = 0; WorldI < GameState->World.Width * GameState->World.Height; WorldI++)
+                {
+                    u8 DarknessLevel = GameState->World.DarknessLevels[WorldI];
+                    if (DarknessLevel == DARKNESS_UNSEEN) continue;
+                    
+                    switch (GameState->World.Tiles[WorldI])
+                    {
+                       case '#':
+                       case 46:
+                       {
+                           if (GroundVariant != 1) continue;
+                       } break;
+
+                       case 254:
+                       {
+                           if (GroundVariant != 2) continue;
+                       } break;
+
+                       case 247:
+                       {
+                           if (GroundVariant != 3) continue;
+                       } break;
+
+                       default: continue;
+                    }
+                        
+                    vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
+                    rect Dest = GetWorldDestRect(GameState->World, WorldP);
+
+                    vec3 Positions[4];
+                    RectGetPoints(Dest, Positions);
+                    u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+
+                    int BaseVert = CurrentVert;
+
+                    for (int i = 0; i < ArrayCount(Positions); i++)
+                    {
+                        VertPositions[CurrentVert++] = Positions[i];
+                    }
+                
+                    for (int i = 0; i < ArrayCount(Indices); i++)
+                    {
+                        VertIndices[CurrentIndex++] = Indices[i] + BaseVert;
+                    }
+                }
+
+                glStencilFunc(GL_ALWAYS, GroundVariant, 0xFF);
+
+                if (CurrentVert > 0 && CurrentIndex > 0)
+                {
+                    DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
+                }
+
+                MemoryArena_Unfreeze(&GameState->TrArenaA);
+            }
+
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        }
+        EndCameraMode();
+    }
+    EndDraw();
+
+    BeginShaderMode(GameState->GroundShader);
+    {
+        BeginDraw();
+        {
+            BeginCameraMode(&GameState->Camera);
+            {
+                glStencilMask(0x00);
+                
+                BindTextureSlot(1, GameState->GroundBrushTex);
+                BindTextureSlot(2, GameState->VigTex);
+                
+                for (int GroundVariant = 1; GroundVariant <= 3; GroundVariant++)
+                {
+                    glStencilFunc(GL_EQUAL, GroundVariant, 0xFF);
+
+                    MemoryArena_Freeze(&GameState->TrArenaA);
+                    
+                    vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec3);
+                    vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec4);
+                    vec4 *VertColors = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 4, vec4);
+                    vec4 C = ColorV4(VA_WHITE);
+                    for (int i = 0; i < GameState->GroundPointCount * 4; i++)
+                    {
+                        VertColors[i] = C;
+                    }
+                    int CurrentVert = 0;
+                    u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, GameState->GroundPointCount * 6, u32);
+                    int CurrentIndex = 0;
+                    
+                    for (int GroundPointI = 0; GroundPointI < GameState->GroundPointCount; GroundPointI++)
+                    {
+                        vec2 P = GameState->GroundPoints[GroundPointI];
+                        vec2 Rots = GameState->GroundRots[GroundPointI];
+                        f32 Scale = 10.0f;
+
+                        rect Dest = Rect(P.X, P.Y, GameState->GroundBrushRect.Width * Scale, GameState->GroundBrushRect.Height * Scale);
+                        Dest.X -= Dest.Width / 2.0f;
+                        Dest.Y -= Dest.Height / 2.0f;
+    
+                        vec3 Positions[4];
+                        RectGetPoints(Dest, Positions);
+    
+                        vec2 TexCoords[4];
+                        rect Source = Rect(0.0f, (GroundVariant-1) * GameState->GroundBrushRect.Height, GameState->GroundBrushRect.Width, GameState->GroundBrushRect.Height);
+                        RectGetPoints(Source, TexCoords);
+                        Rotate4PointsAroundOrigin(TexCoords, RectGetMid(Source), Rots.E[0]);
+                        NormalizeTexCoords(GameState->GroundBrushTex, TexCoords);
+                        FlipTexCoords(TexCoords);
+
+                        vec2 VigTexCoords[4];
+                        rect VigSource = Rect(GameState->VigTex.Width, GameState->VigTex.Height);
+                        RectGetPoints(VigSource, VigTexCoords);
+                        // Rotate4PointsAroundOrigin(VigTexCoords, RectGetMid(VigSource), Rots.E[1]);
+                        NormalizeTexCoords(GameState->VigTex, VigTexCoords);
+                        FlipTexCoords(VigTexCoords);
+
+                        vec4 TexCoordsV4[4];
+                        for (int i = 0; i < ArrayCount(TexCoords); i++)
+                        {
+                            TexCoordsV4[i] = Vec4(TexCoords[i].X, TexCoords[i].Y, VigTexCoords[i].X, VigTexCoords[i].Y);
+                        }
+
+                        u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+
+                        int BaseVert = CurrentVert;
+
+                        for (int i = 0; i < ArrayCount(Positions); i++)
+                        {
+                            VertPositions[CurrentVert] = Positions[i];
+                            VertTexCoords[CurrentVert] = TexCoordsV4[i];
+                            CurrentVert++;
+                        }
+                
+                        for (int i = 0; i < ArrayCount(Indices); i++)
+                        {
+                            VertIndices[CurrentIndex++] = Indices[i] + BaseVert;
+                        }
+                    }
+
+                    DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
+
+                    MemoryArena_Unfreeze(&GameState->TrArenaA);
+                }
+
+                glStencilMask(0xFF); // NOTE: So that stencil mask can be cleared glClear
+            }
+            EndCameraMode();
+        }
+        EndDraw();
+    }
+    EndShaderMode();
+
+    glDisable(GL_STENCIL_TEST);
+}
+
+void
+DrawLighting(game_state *GameState)
+{
+    BeginTextureMode(GameState->LightingRenderTex, Rect(0)); BeginCameraMode(&GameState->Camera); 
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
+
+        MemoryArena_Freeze(&GameState->TrArenaA);
+        
+        int TileCount = GameState->World.Width * GameState->World.Height;
+        vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec3);
+        vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+        vec4 *VertColors = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+        int CurrentVert = 0;
+        u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 6, u32);
+        int CurrentIndex = 0;
+        
+        for (int WorldI = 0; WorldI < TileCount; WorldI++)
+        {
+            u8 DarknessLevel = GameState->World.DarknessLevels[WorldI];
+            if (GameState->World.DarknessLevels[WorldI] == DARKNESS_SEEN)
+            {
+                vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
+                rect Dest = GetWorldDestRect(GameState->World, WorldP);
+
+                vec3 Positions[4];
+                RectGetPoints(Dest, Positions);
+            
+                vec4 ColV = ColorV4(ColorAlpha(VA_BLACK, DarknessLevel));
+
+                int BaseVert = CurrentVert;
+                for (int i = 0; i < ArrayCount(Positions); i++)
+                {
+                    VertPositions[CurrentVert] = Positions[i];
+                    VertColors[CurrentVert] = ColV;
+                    CurrentVert++;
+                }
+
+                u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+                
+                for (int i = 0; i < ArrayCount(Indices); i++)
+                {
+                    VertIndices[CurrentIndex++] = Indices[i] + BaseVert;
+                }
+            }
+        }
+
+        if (CurrentVert > 0 && CurrentIndex > 0)
+        {
+            DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
+        }
+
+        MemoryArena_Unfreeze(&GameState->TrArenaA);
+    }
+    EndCameraMode(); EndTextureMode();
+}
+
+void
+DrawEntities(game_state *GameState)
+{
+    BeginDraw();
+    {
+        // NOTE: Draw entities
+        BeginCameraMode(&GameState->Camera);
+        {
+            MemoryArena_Freeze(&GameState->TrArenaA);
+
+            int TileCount = GameState->World.Width * GameState->World.Height;
+            vec3 *VertPositions = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec3);
+            vec4 *VertTexCoords = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+            vec4 *VertColors = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 4, vec4);
+            int CurrentVert = 0;
+            u32 *VertIndices = MemoryArena_PushArray(&GameState->TrArenaA, TileCount * 6, u32);
+            int CurrentIndex = 0;
+
+            for (int WorldI = 0; WorldI < TileCount; WorldI++)
+            {
+                u8 DarknessLevel = GameState->World.DarknessLevels[WorldI];
+                if (DarknessLevel != DARKNESS_UNSEEN)
+                {
+                    entity *Entity = GameState->World.SpatialEntities[WorldI];
+                    // TODO: Draw the top npc entity, if none, draw the top item pickup entity
+                    if (Entity)
+                    {
+                        if (DarknessLevel == DARKNESS_IN_VIEW || (Entity->Type != ENTITY_NPC))
+                        {
+                            vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
+                            rect Dest = GetWorldDestRect(GameState->World, WorldP);
+                            rect Source = GetGlyphSourceRect(GameState->GlyphAtlas, Entity->Glyph);
+
+                            vec3 Positions[4];
+                            RectGetPoints(Dest, Positions);
+                            vec2 TexCoords[4];
+                            GetTexCoordsForTex(GameState->GlyphAtlas.T, Source, TexCoords);
+                            vec4 TexCoordsV4[4];
+                            for (int i = 0; i < ArrayCount(TexCoords); i++)
+                            {
+                                TexCoordsV4[i] = Vec4(TexCoords[i], 0, 0);
+                            }
+                            vec4 ColV = ColorV4(Entity->Color);
+
+                            int BaseVert = CurrentVert;
+                            for (int i = 0; i < ArrayCount(Positions); i++)
+                            {
+                                VertPositions[CurrentVert] = Positions[i];
+                                VertTexCoords[CurrentVert] = TexCoordsV4[i];
+                                VertColors[CurrentVert] = ColV;
+                                CurrentVert++;
+                            }
+
+                            u32 Indices[] = { 0, 1, 2, 2, 3, 0 };
+                
+                            for (int i = 0; i < ArrayCount(Indices); i++)
+                            {
+                                VertIndices[CurrentIndex++] = Indices[i] + BaseVert;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (CurrentVert > 0 && CurrentIndex > 0)
+            {
+                BindTextureSlot(0, GameState->GlyphAtlas.T);
+                DrawVertices(VertPositions, VertTexCoords, VertColors, VertIndices, CurrentVert, CurrentIndex);
+                UnbindTextureSlot(0);
+            }
+
+            MemoryArena_Unfreeze(&GameState->TrArenaA);
+        }
+        EndCameraMode();
+    }
+    EndDraw();
+}
 
 GAME_API void
 UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
@@ -147,19 +514,24 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         
         GameState->Camera.Rotation = 0.0f;
         CameraInitLogZoomSteps(&GameState->Camera, 0.2f, 5.0f, 5);
+        GameState->Camera.Offset = GetWindowSize() / 2.0f;
 
-        GameState->uiRect = Rect(GetWindowSize());
-        GameState->RTexUI = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, true);
+        GameState->UiRect = Rect(GetWindowSize());
+        GameState->UiRenderTex = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, true);
+        GameState->LightingRenderTex = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         GameState->DebugOverlay = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
-        GameState->GlyphAtlas.T = SavLoadTexture("res/bloody_font.png");
+        GameState->GlyphAtlas.T = SavLoadTexture("res/NewFontTest.png");
         GameState->GlyphAtlas.GlyphsPerRow = 16;
-        GameState->GlyphAtlas.GlyphPxW = 48;
-        GameState->GlyphAtlas.GlyphPxH = 72;
-
+        GameState->GlyphAtlas.GlyphPadX = 1;
+        GameState->GlyphAtlas.GlyphPadY = 1;
+        GameState->GlyphAtlas.GlyphPxW = 42;
+        GameState->GlyphAtlas.GlyphPxH = 54;
+        GameState->GlyphAtlas.GlyphPxWPad = GameState->GlyphAtlas.GlyphPxW + 2 * GameState->GlyphAtlas.GlyphPadX;
+        GameState->GlyphAtlas.GlyphPxHPad = GameState->GlyphAtlas.GlyphPxH + 2 * GameState->GlyphAtlas.GlyphPadY;
         GameState->VigTex = GenerateVignette(&GameState->TrArenaA);
-        GameState->GroundBrushTex = SavLoadTexture("res/GroundBrushes4.png");
+        GameState->GroundBrushTex = SavLoadTexture("res/GroundBrushes5.png");
         GameState->GroundBrushRect = Rect(GameState->GroundBrushTex.Width, GameState->GroundBrushTex.Width);
         GameState->StoneWallTex = SavLoadTexture("res/PurgStoneWall2.png");
         SavSetTextureWrapMode(GameState->StoneWallTex, SAV_CLAMP_TO_EDGE);
@@ -206,15 +578,21 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
         EndShaderMode();
 
-        entity E = GetTestEntityBlueprint(ENTITY_STATIC, '$', VA_WHITE);
-        entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E);
         Noop;
     }
 
     // SECTION: First updates
 
     MemoryArena_Reset(&GameState->TrArenaA);
-    GameState->Camera.Offset = GetWindowSize() / 2.0f;
+    if (WindowSizeChanged())
+    {
+        GameState->Camera.Offset = GetWindowSize() / 2.0f;
+        GameState->UiRect = Rect(GetWindowSize());
+        SavDeleteRenderTexture(&GameState->LightingRenderTex);
+        GameState->LightingRenderTex = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
+        SavDeleteRenderTexture(&GameState->DebugOverlay);
+        GameState->DebugOverlay = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
+    }
 
     // SECTION: Check inputs
 
@@ -235,11 +613,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_C)) RequestedPlayerDP = Vec2I( 1,  1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerTurnSkip = true;
 
-    // TODO: SHOULD UI BE DRAWN BEFORE GAME LOGIC, SO WE GET DON'T HAVE TO PROCESS BUTTON PRESSES ON THE NEXT FRAME???????
-
     // SECTION: Game logic
-
-    static_p int PathGen = 0;
 
     b32 PlayerTookTurn = false;
     if (RequestedPlayerTurnSkip)
@@ -261,54 +635,21 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         Breakpoint;
     }
 
-    vec2 MouseP = GetMousePos();
-    vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
-    vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
+    u8 *VisibilityTest = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, GameState->World.Width * GameState->World.Height, u8);
+    CalculateLineOfSight(&GameState->World, GameState->PlayerEntity->Pos, VisibilityTest, 7);
 
-    if (MousePressed(SDL_BUTTON_LEFT))
+    for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
     {
-        rect R = GetWorldCameraRect(&GameState->Camera);
-        TraceLog("%f, %f, %f, %f", R.X, R.Y, R.Width, R.Height);
-    }
-
-    int Test = GL_MAX_ELEMENTS_VERTICES;
-
-    BeginTextureMode(GameState->DebugOverlay, Rect(0)); BeginCameraMode(&GameState->Camera); 
-    {
-        ClearBackground(ColorAlpha(VA_WHITE, 0));
-
-        entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
-        while (Entity)
+        if (GameState->World.DarknessLevels[i] == DARKNESS_IN_VIEW)
         {
-            if (Entity->Type == ENTITY_NPC)
-            {
-                path_result Path = CalculatePath(&GameState->World,
-                                                 Entity->Pos, GameState->PlayerEntity->Pos,
-                                                 &GameState->TrArenaA, &GameState->TrArenaB,
-                                                 0);
-
-                    
-                for (int Step = 0; Step < Path.PathSteps; Step++)
-                {
-                    DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
-                }
-            }
-
-            Entity = Entity->Next;
+            GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
         }
 
-        u8 *VisibilityTest = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, GameState->World.Width * GameState->World.Height, u8);
-        CalculateLineOfSight(&GameState->World, GameState->PlayerEntity->Pos, VisibilityTest, 7);
-
-        for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
+        if (VisibilityTest[i] == 1)
         {
-            if (VisibilityTest[i] == 0)
-            {
-                // DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLACK, 240));
-            }
+            GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
         }
     }
-    EndCameraMode(); EndTextureMode();
 
     if (PlayerTookTurn)
     {
@@ -318,40 +659,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             if (Entity->Type == ENTITY_NPC)
             {
 #if 0
-                int ShouldMove = GetRandomValue(0, 12);
-            
-                if (ShouldMove >= 6)
-                {
-                    int RandDir = GetRandomValue(0, 4); 
-
-                    vec2i NewEntityP = Entity->Pos;
-                    switch (RandDir)
-                    {
-                        case 0:
-                        {
-                            NewEntityP += Vec2I(0, -1);
-                        } break;
-                
-                        case 1:
-                        {
-                            NewEntityP += Vec2I(1, 0);
-                        } break;
-                                    
-                        case 2:
-                        {
-                            NewEntityP += Vec2I(0, 1);
-                        } break;
-                        case 3:
-                        {
-                            NewEntityP += Vec2I(-1, 0);
-                        } break;
-                
-                        default: break;
-                    }
-                    
-                    MoveEntity(&GameState->World, Entity, NewEntityP);
-                }
-#else
+                int ShouldMove = GetRandomValue(0, 12); if (ShouldMove >= 6) {int RandDir = GetRandomValue(0, 4); vec2i NewEntityP = Entity->Pos; switch (RandDir) {case 0: {NewEntityP += Vec2I(0, -1);} break; case 1: {NewEntityP += Vec2I(1, 0);} break; case 2: {NewEntityP += Vec2I(0, 1);} break; case 3: {NewEntityP += Vec2I(-1, 0);} break; default: break;} MoveEntity(&GameState->World, Entity, NewEntityP);}
+#elif 0
                 if (VecLengthSq(GameState->PlayerEntity->Pos - Entity->Pos) < 49)
                 {
                     path_result Path = CalculatePath(&GameState->World,
@@ -384,9 +693,41 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     Assert(ValidateEntitySpatialPartition(&GameState->World));
 
+    vec2 MouseP = GetMousePos();
+    vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
+    vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
+
     // SECTION: Render
     
-    BeginTextureMode(GameState->RTexUI, GameState->uiRect);
+    // NOTE: Draw debug overlay
+    BeginTextureMode(GameState->DebugOverlay, Rect(0)); BeginCameraMode(&GameState->Camera); 
+    {
+        ClearBackground(ColorAlpha(VA_WHITE, 0));
+
+        entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
+        while (Entity)
+        {
+            if (Entity->Type == ENTITY_NPC)
+            {
+                path_result Path = CalculatePath(&GameState->World,
+                                                 Entity->Pos, GameState->PlayerEntity->Pos,
+                                                 &GameState->TrArenaA, &GameState->TrArenaB,
+                                                 0);
+
+                    
+                for (int Step = 0; Step < Path.PathSteps; Step++)
+                {
+                    DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
+                }
+            }
+
+            Entity = Entity->Next;
+        }
+    }
+    EndCameraMode(); EndTextureMode();
+
+    // NOTE: Draw UI to its own render texture
+    BeginTextureMode(GameState->UiRenderTex, GameState->UiRect);
     {
         ClearBackground(ColorAlpha(VA_WHITE, 0));
 
@@ -399,7 +740,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TrArenaA);
 
-        DrawString(TextFormat("%d, %d", MouseTileP.X, MouseTileP.Y),
+        DrawString(TextFormat("%d, %d", MouseTileP.X, MouseTileP.Y, GameState->World.DarknessLevels[XYToIdx(MouseTileP.X, MouseTileP.Y, GameState->World.Width)]),
                    GameState->Font,
                    GameState->Font->PointSize,
                    10,
@@ -407,41 +748,38 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    VA_MAROON,
                    true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TrArenaA);
-                   
+
+        DrawString(TextFormat("Darkness Level: %d", GameState->World.DarknessLevels[XYToIdx(MouseTileP.X, MouseTileP.Y, GameState->World.Width)]),
+                   GameState->Font,
+                   GameState->Font->PointSize,
+                   10,
+                   110,
+                   VA_MAROON,
+                   true, ColorAlpha(VA_BLACK, 128),
+                   &GameState->TrArenaA);
+
+        DrawRect(Rect(1820, 980, 100, 100), VA_AQUAMARINE);
     }
     EndTextureMode();
 
+    DrawLighting(GameState);
+    
     DrawGround(GameState);
+
+    DrawEntities(GameState);
     
     BeginDraw();
     {
-        BeginCameraMode(&GameState->Camera);
-        {
-            for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
-            {
-                vec2i WorldP = IdxToXY(i, GameState->World.Width);
-                rect Dest = GetWorldDestRect(GameState->World, WorldP);
-
-                entity *Entity = GameState->World.SpatialEntities[i];
-                if (Entity)
-                {
-                    if (Entity->IsTex)
-                    {
-                        DrawTexture(Entity->Tex, Dest, VA_WHITE);
-                    }
-                    else
-                    {
-                        rect Source = GetGlyphSourceRect(GameState->GlyphAtlas, Entity->Glyph);
-                        DrawTexture(GameState->GlyphAtlas.T, Dest, Source, Entity->Color);
-                    }
-                }
-            }
-        }
-        EndCameraMode();
+        // NOTE: Draw overlay render textures: lighting, debug, UI
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+        glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ONE, GL_ZERO);
+        DrawTexture(GameState->LightingRenderTex.Texture, Rect(GetWindowSize()), VA_WHITE);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 
         DrawTexture(GameState->DebugOverlay.Texture, Rect(GetWindowSize()), VA_WHITE);
-        
-        DrawTexture(GameState->RTexUI.Texture, GameState->uiRect, VA_WHITE);
+
+        DrawTexture(GameState->UiRenderTex.Texture, GameState->UiRect, VA_WHITE);
     }
     EndDraw();
 

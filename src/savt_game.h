@@ -5,8 +5,12 @@ struct glyph_atlas
 {
     sav_texture T;
     int GlyphsPerRow;
+    int GlyphPadX;
+    int GlyphPadY;
     int GlyphPxW;
     int GlyphPxH;
+    int GlyphPxWPad;
+    int GlyphPxHPad;
 };
 
 enum entity_flags
@@ -54,6 +58,9 @@ struct world
 
     entity *Entities;
     entity **SpatialEntities;
+
+    u8 *DarknessLevels;
+    
     int EntityTightCount;
     int EntityUsedCount;
     int EntityMaxCount;
@@ -85,8 +92,10 @@ struct game_state
 
     camera_2d Camera;
 
-    rect uiRect;
-    sav_render_texture RTexUI;
+    rect UiRect;
+    sav_render_texture UiRenderTex;
+    
+    sav_render_texture LightingRenderTex;
     sav_render_texture DebugOverlay;
 
     world World;
@@ -116,7 +125,9 @@ inline rect
 GetGlyphSourceRect(glyph_atlas Atlas, u8 Glyph)
 {
     vec2i P = IdxToXY((int) Glyph, Atlas.GlyphsPerRow);
-    return Rect(P.X * Atlas.GlyphPxW, P.Y * Atlas.GlyphPxH, Atlas.GlyphPxW, Atlas.GlyphPxH);
+    int X = P.X * Atlas.GlyphPxWPad + Atlas.GlyphPadX;
+    int Y = P.Y * Atlas.GlyphPxHPad + Atlas.GlyphPadY;
+    return Rect(X, Y, Atlas.GlyphPxW, Atlas.GlyphPxH);
 }
 
 inline entity

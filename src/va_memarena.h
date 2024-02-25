@@ -11,6 +11,9 @@ struct memory_arena
     size_t PrevUsed;
     size_t FrozenUsed;
     size_t FrozenPrevUsed;
+#ifdef SAV_DEBUG
+    b32 Frozen;
+#endif
 };
 
 inline memory_arena
@@ -78,6 +81,10 @@ MemoryArenaNested(memory_arena *Arena, size_t Size)
 inline void
 MemoryArena_Freeze(memory_arena *Arena)
 {
+#ifdef SAV_DEBUG
+    Assert(!Arena->Frozen);
+    Arena->Frozen = true;
+#endif
     Assert(Arena->FrozenUsed == 0);
     Arena->FrozenUsed = Arena->Used;
     Arena->FrozenPrevUsed = Arena->PrevUsed;
@@ -86,6 +93,10 @@ MemoryArena_Freeze(memory_arena *Arena)
 inline void
 MemoryArena_Unfreeze(memory_arena *Arena)
 {
+#ifdef SAV_DEBUG
+    Assert(Arena->Frozen);
+    Arena->Frozen = false;
+#endif
     Arena->Used = Arena->FrozenUsed;
     Arena->PrevUsed = Arena->FrozenPrevUsed;
     Arena->FrozenUsed = 0;

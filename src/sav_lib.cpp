@@ -389,6 +389,8 @@ PollEvents(b32 *Quit)
     }
 
     InputState->MouseWheel = 0;
+
+    SdlState->WindowSizeChanged = false;
     
     SDL_Event Event;
     while(SDL_PollEvent(&Event))
@@ -431,6 +433,7 @@ PollEvents(b32 *Quit)
                 if (Event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
                     SdlState->WindowSize = Vec2((f32) Event.window.data1, (f32) Event.window.data2);
+                    SdlState->WindowSizeChanged = true;
                 }
             } break;
             default: break;
@@ -460,6 +463,7 @@ Quit()
 void SetWindowTitle(const char *title) { SDL_SetWindowTitle(gSdlState.Window, title); }
 vec2 GetWindowSize() { return gSdlState.WindowSize; }
 vec2 GetWindowOrigSize() { return gSdlState.WindowOrigSize; }
+b32 WindowSizeChanged() { return gSdlState.WindowSizeChanged; }
 
 void
 SetWindowBorderless(b32 Borderless)
@@ -1339,6 +1343,29 @@ SavSetTextureWrapMode(sav_texture Texture, tex_wrap_mode WrapMode)
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void
+SavSetTextureFilterMode(sav_texture Texture, tex_filter_mode FilterMode)
+{
+    glBindTexture(GL_TEXTURE_2D, Texture.Glid);
+    switch (FilterMode)
+    {
+        case SAV_LINEAR:
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        } break;
+
+        case SAV_NEAREST:
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        } break;
+
+        default: break;
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 sav_render_texture
 SavLoadRenderTexture(int Width, int Height, b32 FilterNearest)
 {
@@ -1380,6 +1407,20 @@ SavLoadRenderTexture(int Width, int Height, b32 FilterNearest)
     RenderTexture.Texture.Width = Width;
     RenderTexture.Texture.Height = Height;
     return RenderTexture;
+}
+
+void
+SavDeleteRenderTexture(sav_render_texture *RenderTexture)
+{
+    glDeleteTextures(1, &RenderTexture->Texture.Glid);
+    glDeleteRenderbuffers(1, &RenderTexture->DepthRBO);
+    glDeleteFramebuffers(1, &RenderTexture->FBO);
+
+    RenderTexture->FBO = 0;
+    RenderTexture->DepthRBO = 0;
+    RenderTexture->Texture.Glid = 0;
+    RenderTexture->Texture.Width = 0;
+    RenderTexture->Texture.Height = 0;
 }
 
 void

@@ -8,6 +8,7 @@ struct sdl_state
     SDL_Window *Window;
     vec2 WindowSize;
     vec2 WindowOrigSize;
+    b32 WindowSizeChanged;
 
     b32 Borderless;
     rect WindowRectBeforeBorderless;

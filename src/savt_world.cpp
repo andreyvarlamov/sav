@@ -260,6 +260,7 @@ GenerateWorld(game_state *GameState)
     World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
     
     World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
+    World->DarknessLevels = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
 
     World->EntityUsedCount = 0;
     World->EntityMaxCount = ENTITY_MAX_COUNT;
@@ -268,13 +269,14 @@ GenerateWorld(game_state *GameState)
 
     for (int i = 0; i < ArrayCount(gWorldTiles); i++)
     {
-        GameState->World.Tiles[i] = gWorldTiles[i];
+        World->Tiles[i] = gWorldTiles[i];
+        World->DarknessLevels[i] = DARKNESS_UNSEEN;
     }
 
     entity WallBlueprint = {};
     WallBlueprint.Type = ENTITY_STATIC;
-    WallBlueprint.IsTex = true;
-    WallBlueprint.Tex = GameState->StoneWallTex;
+    WallBlueprint.Color = VA_DARKGRAY;
+    WallBlueprint.Glyph = '#';
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
@@ -303,7 +305,6 @@ GenerateWorld(game_state *GameState)
 
     entity PlayerBlueprint = {};
     PlayerBlueprint.Type = ENTITY_PLAYER;
-    PlayerBlueprint.IsTex = false;
     PlayerBlueprint.Color = VA_LIGHTBLUE;
     PlayerBlueprint.Glyph = '@';
     PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 30.0f;
@@ -312,13 +313,12 @@ GenerateWorld(game_state *GameState)
     
     entity EnemyBlueprint = {};
     EnemyBlueprint.Type = ENTITY_NPC;
-    EnemyBlueprint.IsTex = false;
     EnemyBlueprint.Color = VA_CORAL;
     EnemyBlueprint.Glyph = 1 + 9*16;
     EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
     
-    int AttemptsToAdd = 15;
+    int AttemptsToAdd = 10;
     for (int i = 0; i < AttemptsToAdd; i++)
     {
         int X = GetRandomValue(0, World->Width);
@@ -333,6 +333,9 @@ GenerateWorld(game_state *GameState)
 
     entity TestBlueprint = GetTestEntityBlueprint(ENTITY_ITEM_PICKUP, 2 + 9*16, VA_PINK);
     AddEntity(World, Vec2I(3, 3), &TestBlueprint);
+
+    entity E = GetTestEntityBlueprint(ENTITY_STATIC, '$', VA_WHITE);
+    entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E);
 }
 
 // SECTION: Pathing
@@ -364,7 +367,7 @@ struct path_state
 f32
 GetHeuristic(vec2i Start, vec2i End)
 {
-    #if 0
+    #if 1
     // NOTE: Sq Dist. Really unadmissible. Fast but very unoptimal path.
     f32 dX = (f32) (End.X - Start.X);
     f32 dY = (f32) (End.Y - Start.Y);
@@ -424,7 +427,6 @@ IsInOpenSet(path_state *PathState, int Idx)
 
     return false;
 }
-
 
 void
 AddToOpenSet(path_state *PathState, int Idx)
