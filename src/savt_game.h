@@ -48,7 +48,7 @@ struct entity
     entity *Next;
 };
 
-enum { ENTITY_MAX_COUNT = 4096 };
+enum { ENTITY_MAX_COUNT = 16384 };
 
 struct world
 {

@@ -407,6 +407,13 @@ DrawLighting(game_state *GameState)
 void
 DrawEntities(game_state *GameState)
 {
+    static_i b32 WillDrawRoomGround = false;
+
+    if (KeyPressed(SDL_SCANCODE_G))
+    {
+        WillDrawRoomGround = !WillDrawRoomGround;
+    }
+    
     BeginDraw();
     {
         // NOTE: Draw entities
@@ -429,7 +436,7 @@ DrawEntities(game_state *GameState)
                 {
                     entity *Entity = GameState->World.SpatialEntities[WorldI];
                     // TODO: Draw the top npc entity, if none, draw the top item pickup entity
-                    if (Entity)
+                    if (Entity) // && (Entity->Glyph != '#' || WillDrawRoomGround))
                     {
                         if (DarknessLevel == DARKNESS_IN_VIEW || (Entity->Type != ENTITY_NPC))
                         {
@@ -654,7 +661,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
         }
 
-        // if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
+        if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
         {
             GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
         }

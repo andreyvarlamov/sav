@@ -1,5 +1,16 @@
 #include <cstring> // memset
 
+static_g vec2i DIRECTIONS[] = {
+    Vec2I( 0, -1),
+    Vec2I( 1, -1),
+    Vec2I( 1,  0),
+    Vec2I( 1,  1),
+    Vec2I( 0,  1),
+    Vec2I(-1,  1),
+    Vec2I(-1,  0),
+    Vec2I(-1, -1)
+};
+
 // SECTION: Entity management and spatial partition
 
 entity *
@@ -277,6 +288,152 @@ ValidateEntitySpatialPartition(world *World)
 
 // SECTION: World gen
 
+struct room
+{
+    int X;
+    int Y;
+    int W;
+    int H;
+};
+
+vec2i
+GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
+{
+    int TileCount = World->Width * World->Height;
+    int RoomsMax = 50;
+    int SizeMin = 6;
+    int SizeMax = 20;
+
+    MemoryArena_Freeze(WorldArena);
+
+    room *Rooms = MemoryArena_PushArray(WorldArena, RoomsMax, room);
+    int RoomCount = 0;
+
+    for (int RoomI = 0; RoomI < RoomsMax; RoomI++)
+    {
+        room Room;
+        Room.W = GetRandomValue(SizeMin, SizeMax);
+        Room.H = GetRandomValue(SizeMin, SizeMax);
+        Room.X = GetRandomValue(2, World->Width - Room.W - 2);
+        Room.Y = GetRandomValue(2, World->Height - Room.H - 2);
+
+        b32 Intersects = false;
+        for (int Y = Room.Y - 2; Y < (Room.Y + Room.H + 2); Y++)
+        {
+            for (int X = Room.X - 2; X < (Room.X + Room.W + 2); X++)
+            {
+                if (GeneratedMap[XYToIdx(X, Y, World->Width)] > 0)
+                {
+                    Intersects = true;
+                    break;
+                }
+            }
+        }
+
+        if (!Intersects)
+        {
+            for (int Y = Room.Y; Y < (Room.Y + Room.H); Y++)
+            {
+                for (int X = Room.X; X < (Room.X + Room.W); X++)
+                {
+                    GeneratedMap[XYToIdx(X, Y, World->Width)] = 1;
+                }
+            }
+
+            Rooms[RoomCount++] = Room;
+        }
+    }
+
+    MemoryArena_ResizePreviousPushArray(WorldArena, RoomCount, room);
+
+    for (int RoomI = 0; RoomI < RoomCount - 1; RoomI++)
+    {
+        int FilledCount = 0;
+        for (int i = 0; i < TileCount; i++)
+        {
+            if (GeneratedMap[i] == 1)
+            {
+                FilledCount++;
+            }
+        }
+
+        room *Room1 = Rooms + RoomI;
+        room *Room2 = Rooms + RoomI + 1;
+        
+        vec2i Room1Center = Vec2I(Room1->X + Room1->W / 2, Room1->Y + Room1->H / 2);
+        vec2i Room2Center = Vec2I(Room2->X + Room2->W / 2, Room2->Y + Room2->H / 2);
+
+        vec2i LeftCenter = Room1Center.X < Room2Center.X ? Room1Center : Room2Center;
+        vec2i RightCenter = Room1Center.X > Room2Center.X ? Room1Center : Room2Center;
+
+        if (LeftCenter.Y < RightCenter.Y)
+        {
+            for (int X = LeftCenter.X; X <= RightCenter.X; X++)
+            {
+                GeneratedMap[XYToIdx(X, LeftCenter.Y, World->Width)] = 1;
+            }
+
+            for (int Y = LeftCenter.Y; Y <= RightCenter.Y; Y++)
+            {
+                GeneratedMap[XYToIdx(RightCenter.X, Y, World->Width)] = 1;
+            }
+        }
+        else
+        {
+            for (int X = LeftCenter.X; X <= RightCenter.X; X++)
+            {
+                GeneratedMap[XYToIdx(X, RightCenter.Y, World->Width)] = 1;
+            }
+
+            for (int Y = RightCenter.Y; Y <= LeftCenter.Y; Y++)
+            {
+                GeneratedMap[XYToIdx(LeftCenter.X, Y, World->Width)] = 1;
+            }
+        }
+        
+        int NextFilledCount = 0;
+        for (int i = 0; i < TileCount; i++)
+        {
+            if (GeneratedMap[i] == 1)
+            {
+                NextFilledCount++;
+            }
+        }
+
+        // Assert(FilledCount != NextFilledCount);
+    }
+
+    for (int TileI = 0; TileI < TileCount; TileI++)
+    {
+        if (GeneratedMap[TileI] == 0)
+        {
+            vec2i Current = IdxToXY(TileI, World->Width);
+            b32 FoundRoomGround = false;
+            for (int Dir = 0; Dir < 8; Dir++)
+            {
+                vec2i Neighbor = Current + DIRECTIONS[Dir];
+
+                if (GeneratedMap[XYToIdx(Neighbor, World->Width)] == 1)
+                {
+                    FoundRoomGround = true;
+                    break;
+                }
+            }
+
+            if (FoundRoomGround)
+            {
+                GeneratedMap[TileI] = 2;
+            }
+        }
+    }
+
+    vec2i Room0Center = Vec2I(Rooms[0].X + Rooms[0].W / 2, Rooms[0].Y + Rooms[0].Y / 2);
+ 
+    MemoryArena_Unfreeze(WorldArena);
+
+    return Room0Center;
+}
+
 void
 GenerateWorld(game_state *GameState)
 {
@@ -293,6 +450,23 @@ GenerateWorld(game_state *GameState)
     World->EntityMaxCount = ENTITY_MAX_COUNT;
     World->Entities = MemoryArena_PushArray(&GameState->WorldArena, World->EntityMaxCount, entity);
     World->SpatialEntities = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, entity *);
+
+    u8 *GeneratedMap = MemoryArena_PushArrayAndZero(&GameState->WorldArena, World->Width * World->Height, u8);
+    vec2i Room0Center = GenerateRoomMap(&GameState->World, GeneratedMap, &GameState->WorldArena);
+
+    // entity W = GetTestEntityBlueprint(ENTITY_STATIC, '#', VA_WHITE);
+    // entity G = GetTestEntityBlueprint(ENTITY_STATIC, '@', VA_BLACK);
+    // for (int i = 0; i < World->Width * World->Height; i++)
+    // {
+    //     if (GeneratedMap[i] == 1)
+    //     {
+    //         AddEntity(&GameState->World, IdxToXY(i, World->Width), &G, &GameState->WorldArena);
+    //     }
+    //     if (GeneratedMap[i] == 2)
+    //     {
+    //         AddEntity(&GameState->World, IdxToXY(i, World->Width), &W, &GameState->WorldArena);
+    //     }
+    // }
     
     for (int i = 0; i < ArrayCount(gWorldTiles); i++)
     {
@@ -311,7 +485,7 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
-    #if 1
+    #if 0
     for (int X = 0; X < World->Width; X++)
     {
         AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
@@ -332,6 +506,14 @@ GenerateWorld(game_state *GameState)
             AddEntity(World, P, &WallBlueprint, &GameState->WorldArena);
         }
     }
+    #elif 1
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        if (GeneratedMap[i] == 2)
+        {
+            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
+        }
+    }
     #endif
 
     entity PlayerBlueprint = {};
@@ -341,7 +523,7 @@ GenerateWorld(game_state *GameState)
     PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 10000.0f;
     PlayerBlueprint.ViewRange = 7;
     SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
-    GameState->PlayerEntity = AddEntity(World, Vec2I(1, 1), &PlayerBlueprint, &GameState->WorldArena);
+    GameState->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
     
     entity EnemyBlueprint = {};
     EnemyBlueprint.Type = ENTITY_NPC;
@@ -363,26 +545,9 @@ GenerateWorld(game_state *GameState)
             AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
         }
     }
-
-    entity TestBlueprint = GetTestEntityBlueprint(ENTITY_ITEM_PICKUP, 2 + 9*16, VA_PINK);
-    AddEntity(World, Vec2I(3, 3), &TestBlueprint, &GameState->WorldArena);
-
-    entity E = GetTestEntityBlueprint(ENTITY_STATIC, '$', VA_WHITE);
-    entity *AddedE = AddEntity(&GameState->World, Vec2I(5, 5), &E, &GameState->WorldArena);
 }
 
 // SECTION: Pathing
-
-static_g vec2i DIRECTIONS[] = {
-    Vec2I( 0, -1),
-    Vec2I( 1, -1),
-    Vec2I( 1,  0),
-    Vec2I( 1,  1),
-    Vec2I( 0,  1),
-    Vec2I(-1,  1),
-    Vec2I(-1,  0),
-    Vec2I(-1, -1)
-};
 
 enum { OPEN_SET_MAX = 1024, PATH_MAX = 512 };
 
