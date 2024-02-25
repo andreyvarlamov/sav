@@ -122,6 +122,9 @@ SAV_API b32 ReloadGameCode(void **UpdateAndRenderFunc);
 SAV_API b32 InitWindow(const char *Name, int Width, int Height);
 SAV_API void PollEvents(b32 *Quit);
 SAV_API void Quit();
+SAV_API void SetTargetFPS(f64 FPS);
+SAV_API void BeginFrameTiming();
+SAV_API void EndFrameTiming();
 
 SAV_API void SetWindowTitle(const char *Title);
 SAV_API vec2 GetWindowSize();

@@ -21,9 +21,13 @@ int main(int argc, char **argv)
 
     game_memory GameMemory = AllocGameMemory(Megabytes(128));
 
+    SetTargetFPS(120.0);
+
     b32 ShouldQuit = false;
     while (!ShouldQuit)
     {
+        BeginFrameTiming();
+        
         PollEvents(&ShouldQuit);
             
         if (KeyPressed(SDL_SCANCODE_ESCAPE))
@@ -47,6 +51,8 @@ int main(int argc, char **argv)
         {
             UpdateAndRender(&ShouldQuit, Reloaded, GameMemory);
         }
+
+        EndFrameTiming();
     }
 
     Quit();

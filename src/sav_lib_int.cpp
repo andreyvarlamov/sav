@@ -19,6 +19,12 @@ struct sdl_state
     f64 DeltaSamples[TIMING_STAT_AVG_COUNT];
     int CurrentTimingStatSample;
     f64 AvgDelta;
+
+    UINT DesiredSchedulerMS;
+    b32 SleepIsGranular;
+    b32 LimitFPS;
+    f64 TargetFPS;
+    f64 TargetDelta;
 };
 
 struct win32_state

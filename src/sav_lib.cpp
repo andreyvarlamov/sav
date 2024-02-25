@@ -294,9 +294,23 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 printf("OpenGL loaded\n");
                 printf("Vendor: %s\n", glGetString(GL_VENDOR));
                 printf("Renderer: %s\n", glGetString(GL_RENDERER));
-                printf("Version: %s\n", glGetString(GL_VERSION));
+                printf("Version: %s\n\n", glGetString(GL_VERSION));
 
                 SdlState->PerfCounterFreq = SDL_GetPerformanceFrequency();
+
+                TIMECAPS DevCaps;
+                MMRESULT DevCapsGetResult = timeGetDevCaps(&DevCaps, sizeof(DevCaps));
+                if (DevCapsGetResult == MMSYSERR_NOERROR)
+                {
+                    TraceLog("Available DevCaps Range: [%u, %u] msx", DevCaps.wPeriodMin, DevCaps.wPeriodMax);
+                }
+
+                // TODO: If needed handle other wPeriodMin for other systems
+                SdlState->DesiredSchedulerMS = 1;
+                SdlState->SleepIsGranular = (timeBeginPeriod(SdlState->DesiredSchedulerMS) == TIMERR_NOERROR);
+                TraceLog("Sleep is granular: %d", SdlState->SleepIsGranular);
+
+                srand((unsigned) time(NULL));
 
                 // SECTION: GL INIT
 
@@ -323,7 +337,7 @@ InitWindow(const char *WindowName, int WindowWidth, int WindowHeight)
                 SetProjectionMatrix(Mat4(1.0f));
                 SetModelViewMatrix(Mat4(1.0f));
 
-                srand((unsigned) time(NULL));
+                SDL_GL_SetSwapInterval(0);
             }
             else
             {
@@ -352,27 +366,6 @@ PollEvents(b32 *Quit)
 {
     sdl_state *SdlState = &gSdlState;
     input_state *InputState = &gInputState;
-
-    if (SdlState->LastCounter)
-    {
-        u64 CurrentCounter = SDL_GetPerformanceCounter();
-        u64 CounterElapsed = CurrentCounter - SdlState->LastCounter;
-        SdlState->LastCounter = CurrentCounter;
-        SdlState->PrevDelta = (f64) CounterElapsed / (f64) SdlState->PerfCounterFreq;
-
-        SdlState->DeltaSamples[SdlState->CurrentTimingStatSample++] = SdlState->PrevDelta;
-        if (SdlState->CurrentTimingStatSample >= TIMING_STAT_AVG_COUNT)
-        {
-            SdlState->AvgDelta = GetAvgDelta(SdlState->DeltaSamples, TIMING_STAT_AVG_COUNT);
-            SdlState->CurrentTimingStatSample = 0;
-        }
-    }
-    else
-    {
-        SdlState->LastCounter = SDL_GetPerformanceCounter();
-    }
-    
-    gCurrentFrame++;
 
     for (int i = 0; i < SDL_NUM_SCANCODES; i++)
     {
@@ -451,12 +444,86 @@ void
 Quit()
 {
     sdl_state *SdlState = &gSdlState;
+    if (SdlState->SleepIsGranular)
+    {
+        timeEndPeriod(SdlState->DesiredSchedulerMS);
+    }
+
     if (SdlState->Window)
     {
         SDL_DestroyWindow(SdlState->Window);
     }
 
     SDL_Quit();
+}
+
+void
+SetTargetFPS(f64 FPS)
+{
+    sdl_state *SdlState= &gSdlState;
+    SdlState->LimitFPS = true;
+    SdlState->TargetFPS = FPS;
+    SdlState->TargetDelta = 1.0 / SdlState->TargetFPS;
+    TraceLog("Target FPS: %.0f; %.6f\n", SdlState->TargetFPS, SdlState->TargetDelta);
+}
+
+void
+BeginFrameTiming()
+{
+    sdl_state *SdlState = &gSdlState;
+    input_state *InputState = &gInputState;
+
+    if (SdlState->LastCounter)
+    {
+        u64 CurrentCounter = SDL_GetPerformanceCounter();
+        u64 CounterElapsed = CurrentCounter - SdlState->LastCounter;
+        SdlState->LastCounter = CurrentCounter;
+        SdlState->PrevDelta = (f64) CounterElapsed / SdlState->PerfCounterFreq;
+
+        SdlState->DeltaSamples[SdlState->CurrentTimingStatSample++] = SdlState->PrevDelta;
+        if (SdlState->CurrentTimingStatSample >= TIMING_STAT_AVG_COUNT)
+        {
+            SdlState->AvgDelta = GetAvgDelta(SdlState->DeltaSamples, TIMING_STAT_AVG_COUNT);
+            SdlState->CurrentTimingStatSample = 0;
+        }
+    }
+    else
+    {
+        SdlState->LastCounter = SDL_GetPerformanceCounter();
+    }
+
+    gCurrentFrame++;
+}
+
+void
+EndFrameTiming()
+{
+    sdl_state *SdlState = &gSdlState;
+
+    if (SdlState->LimitFPS)
+    {
+        u64 CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+        f64 ElapsedMS = (f64) CounterElapsed / SdlState->PerfCounterFreq;
+
+        u64 TargetElapsed = (u64)(SdlState->TargetDelta * SdlState->PerfCounterFreq);
+
+        int SleepForMS = (int) (1000.0*(SdlState->TargetDelta - ElapsedMS)) - 1;
+        if (SleepForMS > 1)
+        {
+            Sleep((DWORD) SleepForMS);
+
+            CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+            if (CounterElapsed > TargetElapsed)
+            {
+                TraceLog("!!!!!!!!!!! SLEEP MISSED TARGET !!!!!!!!!!!!");
+            }
+        }
+    
+        while (CounterElapsed < TargetElapsed)
+        {
+            CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+        }
+    }
 }
 
 // SECTION: SDL window
@@ -587,7 +654,7 @@ u64 GetCurrentFrame()
 }
 f64 GetDeltaFixed()
 {
-    return 0.00609547959233432486; // TODO: Fixed framerate game logic
+    return gSdlState.TargetDelta; // TODO: Fixed framerate game logic
 }
 f64 GetDeltaPrev()
 {
