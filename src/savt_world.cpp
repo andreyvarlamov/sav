@@ -297,6 +297,10 @@ GenerateWorld(game_state *GameState)
     for (int i = 0; i < ArrayCount(gWorldTiles); i++)
     {
         World->Tiles[i] = gWorldTiles[i];
+    }
+
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
         World->DarknessLevels[i] = DARKNESS_UNSEEN;
     }
 
@@ -307,7 +311,7 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
-    #if 0
+    #if 1
     for (int X = 0; X < World->Width; X++)
     {
         AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
@@ -319,7 +323,7 @@ GenerateWorld(game_state *GameState)
         AddEntity(World, Vec2I(0, Y), &WallBlueprint, &GameState->WorldArena);
         AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint, &GameState->WorldArena);
     }
-    #elif 1
+    #elif 0
     for (int i = 0; i < ArrayCount(gWorldWalls); i++)
     {
         if (gWorldWalls[i] == '#')
@@ -347,7 +351,7 @@ GenerateWorld(game_state *GameState)
     EnemyBlueprint.ViewRange = 5;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
     
-    int AttemptsToAdd = 15;
+    int AttemptsToAdd = 50;
     for (int i = 0; i < AttemptsToAdd; i++)
     {
         int X = GetRandomValue(0, World->Width);

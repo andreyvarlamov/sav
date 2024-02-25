@@ -15,8 +15,8 @@
 
 #include <cstdio>
 
-static_g int gWorldWidth = 24;
-static_g int gWorldHeight = 24;
+static_g int gWorldWidth = 100;
+static_g int gWorldHeight = 100;
 
 static_g u8 gWorldWalls[] = {
     '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
@@ -200,12 +200,6 @@ DrawGround(game_state *GameState)
                     
                     switch (GameState->World.Tiles[WorldI])
                     {
-                       case '#':
-                       case 46:
-                       {
-                           if (GroundVariant != 1) continue;
-                       } break;
-
                        case 254:
                        {
                            if (GroundVariant != 2) continue;
@@ -216,7 +210,10 @@ DrawGround(game_state *GameState)
                            if (GroundVariant != 3) continue;
                        } break;
 
-                       default: continue;
+                       default:
+                       {
+                           if (GroundVariant != 1) continue;
+                       } break;
                     }
                         
                     vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
@@ -499,10 +496,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         size_t RootArenaSize = GameMemory.Size - Megabytes(16);
         GameState->RootArena = MemoryArena(RootArenaBase, RootArenaSize);
 
-        GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+        GameState->WorldArena = MemoryArenaNested(&GameState->RootArena, Megabytes(32));
         GameState->ResourceArena = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->TrArenaA = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
         GameState->TrArenaB = MemoryArenaNested(&GameState->RootArena, Megabytes(16));
+
+        TraceLog("Root arena used mem: %zu/%zu MB", GameState->RootArena.Used / 1024 / 1024, GameState->RootArena.Size / 1024 / 1024);
 
         GameState->GroundShader = BuildCustomShader("res/ground.vs", "res/ground.fs");
         BeginShaderMode(GameState->GroundShader);
@@ -540,8 +539,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         UpdateCameraToWorldTarget(&GameState->Camera, GameState->World, GameState->PlayerEntity->Pos);
 
-        int GroundPointsWidth = 10;
-        int GroundPointsHeight = 15;
+        int GroundPointsWidth = 32;
+        int GroundPointsHeight = 40;
         GameState->GroundPointCount = GroundPointsWidth * GroundPointsHeight;
         GameState->GroundPoints = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
         GameState->GroundRots = MemoryArena_PushArray(&GameState->WorldArena, GameState->GroundPointCount, vec2);
@@ -636,6 +635,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     }
 
     // TODO: Optimize when we recalculate field of view
+    // TODO: Optimize by spinning through entities and making a map of occupied tiles before hand
+    // TODO: Optimize by only calculating entity fov if player is in (some) range
     for (int i = 0; i < GameState->World.EntityUsedCount; i++)
     {
         entity *Entity = GameState->World.Entities + i;
@@ -653,7 +654,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
         }
 
-        if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
+        // if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
         {
             GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
         }
