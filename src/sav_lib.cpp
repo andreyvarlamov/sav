@@ -507,7 +507,7 @@ EndFrameTiming()
 
         u64 TargetElapsed = (u64)(SdlState->TargetDelta * SdlState->PerfCounterFreq);
 
-        int SleepForMS = (int) (1000.0*(SdlState->TargetDelta - ElapsedMS)) - 1;
+        int SleepForMS = (int) (1000.0*(SdlState->TargetDelta - ElapsedMS)) - 2;
         if (SleepForMS > 1)
         {
             Sleep((DWORD) SleepForMS);
@@ -515,14 +515,18 @@ EndFrameTiming()
             CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
             if (CounterElapsed > TargetElapsed)
             {
-                TraceLog("!!!!!!!!!!! SLEEP MISSED TARGET !!!!!!!!!!!!");
+                TraceLog("!!!!!!!!!!! SLEEP MISSED TARGET BY %f SEC !!!!!!!!!!!!", (f64) (CounterElapsed - TargetElapsed) / SdlState->PerfCounterFreq);
             }
         }
-    
+
+        // int Spins = 0;
         while (CounterElapsed < TargetElapsed)
         {
             CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
+            // Spins++;
         }
+
+        // Noop;
     }
 }
 

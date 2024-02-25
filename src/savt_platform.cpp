@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
     game_memory GameMemory = AllocGameMemory(Megabytes(128));
 
-    SetTargetFPS(120.0);
+    SetTargetFPS(60.0);
 
     b32 ShouldQuit = false;
     while (!ShouldQuit)
