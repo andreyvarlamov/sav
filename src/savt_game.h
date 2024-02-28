@@ -41,6 +41,7 @@ struct entity
     f32 Health;
     f32 MaxHealth;
     u32 Flags;
+    int ActionCost;
 
     int ViewRange;
     u8 *FieldOfView;
@@ -50,6 +51,12 @@ struct entity
 
 enum { ENTITY_MAX_COUNT = 16384 };
 
+struct entity_queue_node
+{
+    entity *Entity;
+    int LeftoverCost;
+};
+
 struct world
 {
     int Width;
@@ -58,21 +65,25 @@ struct world
     int TilePxH;
 
     u8 *Tiles;
+    u8 *DarknessLevels;
 
     entity *Entities;
-    entity **SpatialEntities;
-
-    u8 *DarknessLevels;
-    
     int EntityTightCount;
     int EntityUsedCount;
     int EntityMaxCount;
+
+    entity **SpatialEntities;
+
+    entity_queue_node *EntityTurnQueue;
+    int TurnQueueStart;
+    int TurnQueueEnd;
+    int TurnQueueMax;
 };
 
 struct collision_info
 {
-    b32 Collided;
     entity *Entity;
+    b32 Collided;
 };
 
 struct game_state

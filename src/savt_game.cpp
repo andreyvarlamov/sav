@@ -212,7 +212,7 @@ DrawGround(game_state *GameState)
 
                        default:
                        {
-                           if (GroundVariant != 1) continue;
+                           if (GroundVariant != 2) continue;
                        } break;
                     }
                         
@@ -528,7 +528,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->DebugOverlay = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         
         GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
-        GameState->GlyphAtlas.T = SavLoadTexture("res/NewFontTest.png");
+        GameState->GlyphAtlas.T = SavLoadTexture("res/NewFontCompromise.png");
         GameState->GlyphAtlas.GlyphsPerRow = 16;
         GameState->GlyphAtlas.GlyphPadX = 1;
         GameState->GlyphAtlas.GlyphPadY = 1;
@@ -613,11 +613,11 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_W)) RequestedPlayerDP = Vec2I( 0, -1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_E)) RequestedPlayerDP = Vec2I( 1, -1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_A)) RequestedPlayerDP = Vec2I(-1,  0);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_S)) RequestedPlayerDP = Vec2I( 0,  1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerDP = Vec2I( 0,  1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_D)) RequestedPlayerDP = Vec2I( 1,  0);
     if (KeyPressedOrRepeat(SDL_SCANCODE_Z)) RequestedPlayerDP = Vec2I(-1,  1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_C)) RequestedPlayerDP = Vec2I( 1,  1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerTurnSkip = true;
+    if (KeyPressedOrRepeat(SDL_SCANCODE_S)) RequestedPlayerTurnSkip = true;
 
     // SECTION: Game logic
 
@@ -654,6 +654,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
     }
 
+    static_i b32 IgnoreFieldOfView = false;
+    if (KeyPressed(SDL_SCANCODE_F))
+    {
+        IgnoreFieldOfView = !IgnoreFieldOfView;
+    }
+    
     for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
     {
         if (GameState->World.DarknessLevels[i] == DARKNESS_IN_VIEW)
@@ -661,7 +667,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
         }
 
-        if (GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
+        if (IgnoreFieldOfView || GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
         {
             GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
         }

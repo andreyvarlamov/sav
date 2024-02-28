@@ -348,15 +348,6 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
 
     for (int RoomI = 0; RoomI < RoomCount - 1; RoomI++)
     {
-        int FilledCount = 0;
-        for (int i = 0; i < TileCount; i++)
-        {
-            if (GeneratedMap[i] == 1)
-            {
-                FilledCount++;
-            }
-        }
-
         room *Room1 = Rooms + RoomI;
         room *Room2 = Rooms + RoomI + 1;
         
@@ -364,7 +355,7 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
         vec2i Room2Center = Vec2I(Room2->X + Room2->W / 2, Room2->Y + Room2->H / 2);
 
         vec2i LeftCenter = Room1Center.X < Room2Center.X ? Room1Center : Room2Center;
-        vec2i RightCenter = Room1Center.X > Room2Center.X ? Room1Center : Room2Center;
+        vec2i RightCenter = Room1Center.X >= Room2Center.X ? Room1Center : Room2Center;
 
         if (LeftCenter.Y < RightCenter.Y)
         {
@@ -390,17 +381,6 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
                 GeneratedMap[XYToIdx(LeftCenter.X, Y, World->Width)] = 1;
             }
         }
-        
-        int NextFilledCount = 0;
-        for (int i = 0; i < TileCount; i++)
-        {
-            if (GeneratedMap[i] == 1)
-            {
-                NextFilledCount++;
-            }
-        }
-
-        // Assert(FilledCount != NextFilledCount);
     }
 
     for (int TileI = 0; TileI < TileCount; TileI++)
@@ -427,7 +407,7 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
         }
     }
 
-    vec2i Room0Center = Vec2I(Rooms[0].X + Rooms[0].W / 2, Rooms[0].Y + Rooms[0].Y / 2);
+    vec2i Room0Center = Vec2I(Rooms[0].X + Rooms[0].W / 2, Rooms[0].Y + Rooms[0].H / 2);
  
     MemoryArena_Unfreeze(WorldArena);
 
@@ -480,8 +460,8 @@ GenerateWorld(game_state *GameState)
 
     entity WallBlueprint = {};
     WallBlueprint.Type = ENTITY_STATIC;
-    WallBlueprint.Color = VA_DARKGRAY;
-    WallBlueprint.Glyph = '#';
+    WallBlueprint.Color = VA_SLATEGRAY;
+    WallBlueprint.Glyph = 11 + 16*13;
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
@@ -518,7 +498,7 @@ GenerateWorld(game_state *GameState)
 
     entity PlayerBlueprint = {};
     PlayerBlueprint.Type = ENTITY_PLAYER;
-    PlayerBlueprint.Color = VA_LIGHTBLUE;
+    PlayerBlueprint.Color = VA_MAROON;
     PlayerBlueprint.Glyph = '@';
     PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 10000.0f;
     PlayerBlueprint.ViewRange = 7;
@@ -907,4 +887,112 @@ IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
     int WorldI = XYToIdx(Pos, World->Width);
 
     return FieldOfVision[WorldI];
+}
+
+// SECTION: Entity Turn Queue
+
+void
+InitializeEntityTurnQueue(world *World, entity *PlayerEntity, memory_arena *WorldArena)
+{
+    Assert(PlayerEntity);
+    
+    World->TurnQueueStart = 0;
+    World->TurnQueueEnd = 0;
+    World->TurnQueueMax = World->EntityMaxCount;
+    World->EntityTurnQueue = MemoryArena_PushArray(WorldArena, World->TurnQueueMax, entity_queue_node);
+
+    entity_queue_node PlayerNode;
+    PlayerNode.Entity = PlayerEntity;
+    PlayerNode.QueuePosition = 0;
+    World->EntityTurnQueue[World->TurnQueueEnd+] = PlayerNode;
+    
+    for (int i = 0; i < EntityUsedCount; i++)
+    {
+        entity *E = World->Entities + i;
+        if (E->Type == ENTITY_NPC)
+        {
+            entity_queue_node Node;
+            Node.Entity = E;
+            Node.QueuePosition = 0;
+            World->EntityTurnQueue[World->TurnQueueEnd++] = Node;
+        }
+    }
+}
+
+entity *
+PopEntityFromTurnQueue(world *World)
+{
+    entity_queue_node *Node = World->EntityTurnQueue + World->TurnQueueStart++;
+    World->TurnQueueStart = World->TurnQueueStart % World->TurnQueueMax;
+
+    int CostToConsume = Node->LeftoverCost;
+
+    if (World->TurnQueueStart < World->TurnQueueEnd)
+    {
+        for (int I = World->TurnQueueStart; I < World->TurnQueueEnd; I++)
+        {
+            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+        }
+    }
+    else
+    {
+        for (int I = World->TurnQueueStart; I < World->TurnQueueMax; I++)
+        {
+            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+        }
+
+        for (int I = 0; I < World->TurnQueueEnd; I++)
+        {
+            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+        }
+    }
+}
+
+void
+InsertEntityToTurnQueue(world *World, entity *Entity)
+{
+    Assert(World->EntityTurnStart != World->EntityTurnEnd);
+
+    if (World->TurnQueueStart < World->TurnQueueEnd)
+    {
+        int InsertI;
+        for (InsertI = World->TurnQueueEnd; InsertI >= World->TurnQueueStart; InsertI--)
+        {
+            if (World->EntityTurnQueue[InsertI].LeftoverCost <= Entity->ActionCost)
+            {
+                break;
+            }
+        }
+        InsertI++;
+
+        for (int I = World->TurnQueueEnd - 1; I >= InsertI; I--)
+        {
+            int NextI = ((I + 1) >= World->TurnQueueMax) ? 0 : (I + 1);
+            World->EntityTurnQueue[NextI] = World->EntityTurnQueue[I];
+        }
+    }
+    else
+    {
+        int InsertI;
+        for (InsertI = 0; InsertI < World->TurnQueueEnd; InsertI++)
+        {
+            if (World->EntityTurnQueue[InsertI].LeftoverCost <= Entity->ActionCost)
+            {
+                break;
+            }
+        }
+        
+        for (int I = World->TurnQueueStart; I < World->TurnQueueMax; I++)
+        {
+            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+        }
+
+        for (int I = 0; I < World->TurnQueueEnd; I++)
+        {
+            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+        }
+    }
+
+    World->TurnQueueEnd++;
+    World->TurnQueueEnd = World->TurnQueueEnd % World->TurnQueueMax;
 }
