@@ -398,6 +398,97 @@ DrawEntities(game_state *GameState)
     EndDraw();
 }
 
+void
+UpdateNpcState(game_state *GameState, world *World, entity *Entity)
+{
+    // NOTE: Pre-update
+    switch (Entity->NpcState)
+    {
+        case NPC_STATE_IDLE:
+        {
+            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
+                               EntityExists(World->PlayerEntity));
+
+            if (PlayerInFOV)
+            {
+                Entity->NpcState = NPC_STATE_HUNTING;
+                TraceLog("Entity %p is now hunting player.", Entity);
+            }
+        } break;
+
+        case NPC_STATE_HUNTING:
+        {
+            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
+                               EntityExists(World->PlayerEntity));
+
+            if (!PlayerInFOV)
+            {
+                Entity->NpcState = NPC_STATE_IDLE;
+                TraceLog("Entity %p is now idle.", Entity);
+            }
+        } break;
+
+        default:
+        {
+            InvalidCodePath;
+        } break;
+    }
+
+    // NOTE: Update
+    switch (Entity->NpcState)
+    {
+        case NPC_STATE_IDLE:
+        {
+            int ShouldMove = GetRandomValue(0, 12);
+            if (ShouldMove >= 6)
+            {
+                int RandDir = GetRandomValue(0, 4);
+                vec2i NewEntityP = Entity->Pos;
+                switch (RandDir) {
+                    case 0: {
+                        NewEntityP += Vec2I(0, -1);
+                    } break;
+                    case 1:
+                    {
+                        NewEntityP += Vec2I(1, 0);
+                    } break;
+                    case 2:
+                    {
+                        NewEntityP += Vec2I(0, 1);
+                    } break;
+                    case 3:
+                    {
+                        NewEntityP += Vec2I(-1, 0);
+                    } break;
+                    default: break;
+                }
+
+                b32 TurnUsed;
+                MoveEntity(&GameState->World, Entity, NewEntityP, &TurnUsed);
+            }
+        } break;
+
+        case NPC_STATE_HUNTING:
+        {
+            path_result Path = CalculatePath(World,
+                                             Entity->Pos, World->PlayerEntity->Pos,
+                                             &GameState->TrArenaA, &GameState->TrArenaB,
+                                             0);
+            if (Path.FoundPath && Path.Path)
+            {
+                vec2i NewEntityP = Path.Path[0];
+                b32 TurnUsed;
+                MoveEntity(&GameState->World, Entity, NewEntityP, &TurnUsed);
+            }
+        } break;
+
+        default:
+        {
+            InvalidCodePath;
+        } break;
+    }
+}
+
 GAME_API void
 UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory) 
 {
@@ -454,6 +545,11 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         SavSetTextureWrapMode(GameState->StoneWallTex, SAV_CLAMP_TO_EDGE);
 
         GenerateWorld(GameState);
+
+        TraceLog("Allocated %zu KB for %d entities. Each entity is %zu bytes.",
+                 GameState->World.EntityMaxCount * sizeof(*GameState->World.Entities) / 1024,
+                 GameState->World.EntityMaxCount,
+                 sizeof(*GameState->World.Entities));
 
         UpdateCameraToWorldTarget(&GameState->Camera, &GameState->World, GameState->World.PlayerEntity->Pos);
 
@@ -565,12 +661,14 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                     UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
                 }
             }
-
-            if (TurnUsed)
+            else
             {
                 TraceLog("");
                 TraceLog("-------------Player makes a move--------------");
+            }
 
+            if (TurnUsed)
+            {
                 // NOTE: Set this regardless of whether player moved, because that will trigger entities to move,
                 // which for now means that player's FOV and the lighting has to be recalculated
                 EntityPositionsChanged = true;
@@ -587,57 +685,13 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         if (ActiveEntity->Type == ENTITY_NPC)
         {
             // TODO: Optimize by only calculating entity fov if player is in (some) range
-            if (ActiveEntity->Type == ENTITY_NPC && ActiveEntity->FieldOfView != NULL && ActiveEntity->ViewRange > 1)
+            if (ActiveEntity->FieldOfView != NULL && ActiveEntity->ViewRange > 1)
             {
                 memset(ActiveEntity->FieldOfView, 0, World->Width * World->Height * sizeof(ActiveEntity->FieldOfView[0]));
                 CalculateLineOfSight(World, ActiveEntity->Pos, ActiveEntity->FieldOfView, ActiveEntity->ViewRange);
             }
             
-            if (ActiveEntity->FieldOfView != NULL && IsInFOV(World, ActiveEntity->FieldOfView, World->PlayerEntity->Pos) &&
-                EntityExists(World->PlayerEntity))
-            {
-                path_result Path = CalculatePath(World,
-                                                 ActiveEntity->Pos, World->PlayerEntity->Pos,
-                                                 &GameState->TrArenaA, &GameState->TrArenaB,
-                                                 0);
-
-                if (Path.FoundPath && Path.Path)
-                {
-                    vec2i NewEntityP = Path.Path[0];
-                    b32 TurnUsed;
-                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP, &TurnUsed);
-                }
-            }
-            else
-            {
-                int ShouldMove = GetRandomValue(0, 12);
-                if (ShouldMove >= 6)
-                {
-                    int RandDir = GetRandomValue(0, 4);
-                    vec2i NewEntityP = ActiveEntity->Pos;
-                    switch (RandDir) {
-                        case 0: {
-                            NewEntityP += Vec2I(0, -1);
-                        } break;
-                        case 1:
-                        {
-                            NewEntityP += Vec2I(1, 0);
-                        } break;
-                        case 2:
-                        {
-                            NewEntityP += Vec2I(0, 1);
-                        } break;
-                        case 3:
-                        {
-                            NewEntityP += Vec2I(-1, 0);
-                        } break;
-                        default: break;
-                    }
-
-                    b32 TurnUsed;
-                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP, &TurnUsed);
-                }
-            }
+            UpdateNpcState(GameState, World, ActiveEntity);
         }
         
         EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);

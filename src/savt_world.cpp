@@ -233,6 +233,8 @@ ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity, world *World
                 
     if (ActiveEntity == World->PlayerEntity)
     {
+        TraceLog("");
+        TraceLog("-------------Player makes a move--------------");
         TraceLog("Player hits entity %p. Remaining health: %f", PassiveEntity, PassiveEntity->Health);
     }
     else
@@ -287,15 +289,19 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
         AddEntityToSpatial(World, NewP, Entity);
 
         Entity->Pos = NewP;
+#if 0
         if (Entity == World->PlayerEntity)
         {
+            TraceLog("");
+            TraceLog("-------------Player makes a move--------------");
             TraceLog("Player moves without hitting anyone");
         }
         else
         {
             TraceLog("Entity %p moves without hitting anyone", Entity);
         }
-
+#endif
+        
         *Out_TurnUsed = true;
         return true;
     }
@@ -506,6 +512,8 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *TrArena)
     return Room0Center;
 }
 
+#define GENERATED_MAP 1
+
 void
 GenerateWorld(game_state *GameState)
 {
@@ -533,7 +541,14 @@ GenerateWorld(game_state *GameState)
     World->TurnQueueMax = World->EntityMaxCount;
     World->EntityTurnQueue = MemoryArena_PushArray(&GameState->WorldArena, World->TurnQueueMax, entity_queue_node);
 
-#if 1
+    entity WallBlueprint = {};
+    WallBlueprint.Type = ENTITY_STATIC;
+    WallBlueprint.Color = VA_SLATEGRAY;
+    WallBlueprint.Glyph = 11 + 16*13;
+    WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
+    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
+
+#if (GENERATED_MAP == 1)
     
     u8 *GeneratedEntityMap = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, World->Width * World->Height, u8);
     vec2i Room0Center = GenerateRoomMap(World, GeneratedEntityMap, &GameState->TrArenaA);
@@ -552,6 +567,15 @@ GenerateWorld(game_state *GameState)
     //     }
     // }
 
+    // NOTE: Add walls
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        if (GeneratedEntityMap[i] == 2)
+        {
+            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
+        }
+    }
+
 #else
 
     vec2i Room0Center = Vec2I(5, 5);
@@ -561,27 +585,6 @@ GenerateWorld(game_state *GameState)
         World->TilesInitialized[i] = true;
         World->Tiles[i] = TILE_STONE;
     }
-    
-#endif
-
-    entity WallBlueprint = {};
-    WallBlueprint.Type = ENTITY_STATIC;
-    WallBlueprint.Color = VA_SLATEGRAY;
-    WallBlueprint.Glyph = 11 + 16*13;
-    WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
-    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
-
-#if 1
-    
-    for (int i = 0; i < World->Width * World->Height; i++)
-    {
-        if (GeneratedEntityMap[i] == 2)
-        {
-            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
-        }
-    }
-    
-#else
 
     for (int X = 0; X < World->Width; X++)
     {
@@ -614,11 +617,12 @@ GenerateWorld(game_state *GameState)
     EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
     EnemyBlueprint.ActionCost = 150;
     EnemyBlueprint.ViewRange = 20;
+    EnemyBlueprint.NpcState = NPC_STATE_IDLE;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
 
     int EnemyCount = 0;
     int AttemptCount = 0;
-    int EnemiesToAdd = 0;
+    int EnemiesToAdd = 50;
     int MaxAttempts = 500;
     while (EnemyCount < EnemiesToAdd && AttemptCount < MaxAttempts)
     {

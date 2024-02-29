@@ -29,6 +29,14 @@ enum entity_type
     ENTITY_TYPE_COUNT
 };
 
+enum npc_state
+{
+    NPC_STATE_NONE = 0,
+    NPC_STATE_IDLE,
+    NPC_STATE_HUNTING,
+    NPC_STATE_COUNT
+};
+
 struct entity
 {
     u8 Type;
@@ -45,6 +53,8 @@ struct entity
 
     int ViewRange;
     u8 *FieldOfView;
+
+    u8 NpcState;
 
     entity *Next;
 };
