@@ -123,10 +123,7 @@ AddEntityToSpatial(world *World, vec2i Pos, entity *Entity)
     int WorldI = XYToIdx(Pos, World->Width);
 
     entity *HeadEntity = World->SpatialEntities[WorldI];
-    if (HeadEntity)
-    {
-        Entity->Next = HeadEntity;
-    }
+    Entity->Next = HeadEntity;
 
     World->SpatialEntities[WorldI] = Entity;
 }
@@ -198,6 +195,8 @@ FindNextFreeEntitySlot(world *World)
     return Entity;
 }
 
+void EntityTurnQueueInsert(world *World, entity *Entity, int NewCostOwed);
+
 entity *
 AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 {
@@ -216,6 +215,11 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 
     AddEntityToSpatial(World, Pos, Entity);
 
+    if (Entity->ActionCost > 0)
+    {
+        EntityTurnQueueInsert(World, Entity, 0);
+    }
+
     return Entity;
 }
 
@@ -231,11 +235,35 @@ MoveEntity(world *World, entity *Entity, vec2i NewP)
             if (Col.Entity)
             {
                 Col.Entity->Health -= 3;
-                TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
+                
+                if (Entity == World->PlayerEntity)
+                {
+                    TraceLog("Player hits entity %p. Remaining health: %f", Col.Entity, Col.Entity->Health);
+                }
+                else
+                {
+                    if (Col.Entity == World->PlayerEntity)
+                    {
+                        TraceLog("Entity %p hits player. Remaining health: %f", Entity, Col.Entity->Health);
+                    }
+                    else
+                    {
+                        TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
+                    }
+                }
+
                 if (Col.Entity->Health <= 0.0f)
                 {
-                    TraceLog("Entity %p is dead.", Col.Entity);
+                    if (Col.Entity == World->PlayerEntity)
+                    {
+                        TraceLog("Player is dead.");
+                    }
+                    else
+                    {
+                        TraceLog("Entity %p is dead.", Col.Entity);
+                    }
                 }
+
             }
 
             return false;
@@ -246,6 +274,14 @@ MoveEntity(world *World, entity *Entity, vec2i NewP)
             AddEntityToSpatial(World, NewP, Entity);
 
             Entity->Pos = NewP;
+            if (Entity == World->PlayerEntity)
+            {
+                TraceLog("Player moves without hitting anyone");
+            }
+            else
+            {
+                TraceLog("Entity %p moves without hitting anyone", Entity);
+            }
 
             return true;
         }
@@ -414,12 +450,13 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
     return Room0Center;
 }
 
+enum { TILE_STONE = 1 };
 void
 GenerateWorld(game_state *GameState)
 {
     world *World = &GameState->World;
-    World->Width = gWorldWidth;
-    World->Height = gWorldHeight;
+    World->Width = 100;
+    World->Height = 100;
     World->TilePxW = GameState->GlyphAtlas.GlyphPxW;
     World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
     
@@ -429,10 +466,19 @@ GenerateWorld(game_state *GameState)
     World->EntityUsedCount = 0;
     World->EntityMaxCount = ENTITY_MAX_COUNT;
     World->Entities = MemoryArena_PushArray(&GameState->WorldArena, World->EntityMaxCount, entity);
+
     World->SpatialEntities = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, entity *);
 
+    World->TurnQueueCount = 0;
+    World->TurnQueueMax = World->EntityMaxCount;
+    World->EntityTurnQueue = MemoryArena_PushArray(&GameState->WorldArena, World->TurnQueueMax, entity_queue_node);
+
+#if 0
     u8 *GeneratedMap = MemoryArena_PushArrayAndZero(&GameState->WorldArena, World->Width * World->Height, u8);
     vec2i Room0Center = GenerateRoomMap(&GameState->World, GeneratedMap, &GameState->WorldArena);
+#else
+    vec2i Room0Center = Vec2I(5, 5);
+#endif
 
     // entity W = GetTestEntityBlueprint(ENTITY_STATIC, '#', VA_WHITE);
     // entity G = GetTestEntityBlueprint(ENTITY_STATIC, '@', VA_BLACK);
@@ -448,9 +494,9 @@ GenerateWorld(game_state *GameState)
     //     }
     // }
     
-    for (int i = 0; i < ArrayCount(gWorldTiles); i++)
+    for (int i = 0; i < World->Width * World->Height; i++)
     {
-        World->Tiles[i] = gWorldTiles[i];
+        World->Tiles[i] = TILE_STONE;
     }
 
     for (int i = 0; i < World->Width * World->Height; i++)
@@ -465,7 +511,7 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
-    #if 0
+    #if 1
     for (int X = 0; X < World->Width; X++)
     {
         AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
@@ -477,16 +523,7 @@ GenerateWorld(game_state *GameState)
         AddEntity(World, Vec2I(0, Y), &WallBlueprint, &GameState->WorldArena);
         AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint, &GameState->WorldArena);
     }
-    #elif 0
-    for (int i = 0; i < ArrayCount(gWorldWalls); i++)
-    {
-        if (gWorldWalls[i] == '#')
-        {
-            vec2i P = IdxToXY(i, World->Width);
-            AddEntity(World, P, &WallBlueprint, &GameState->WorldArena);
-        }
-    }
-    #elif 1
+    #else
     for (int i = 0; i < World->Width * World->Height; i++)
     {
         if (GeneratedMap[i] == 2)
@@ -500,17 +537,19 @@ GenerateWorld(game_state *GameState)
     PlayerBlueprint.Type = ENTITY_PLAYER;
     PlayerBlueprint.Color = VA_MAROON;
     PlayerBlueprint.Glyph = '@';
-    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 10000.0f;
+    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 100.0f;
+    PlayerBlueprint.ActionCost = 100;
     PlayerBlueprint.ViewRange = 7;
     SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
-    GameState->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
+    World->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
     
     entity EnemyBlueprint = {};
     EnemyBlueprint.Type = ENTITY_NPC;
     EnemyBlueprint.Color = VA_CORAL;
     EnemyBlueprint.Glyph = 1 + 9*16;
     EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
-    EnemyBlueprint.ViewRange = 5;
+    EnemyBlueprint.ActionCost = 150;
+    EnemyBlueprint.ViewRange = 20;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
     
     int AttemptsToAdd = 50;
@@ -891,108 +930,104 @@ IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
 
 // SECTION: Entity Turn Queue
 
-void
-InitializeEntityTurnQueue(world *World, entity *PlayerEntity, memory_arena *WorldArena)
+inline entity_queue_node
+MakeEntityQueueNode(entity *Entity, int Cost)
 {
-    Assert(PlayerEntity);
-    
-    World->TurnQueueStart = 0;
-    World->TurnQueueEnd = 0;
-    World->TurnQueueMax = World->EntityMaxCount;
-    World->EntityTurnQueue = MemoryArena_PushArray(WorldArena, World->TurnQueueMax, entity_queue_node);
+    entity_queue_node Node;
+    Node.Entity = Entity;
+    Node.LeftoverCost = Cost;
+    return Node;
+}
 
-    entity_queue_node PlayerNode;
-    PlayerNode.Entity = PlayerEntity;
-    PlayerNode.QueuePosition = 0;
-    World->EntityTurnQueue[World->TurnQueueEnd+] = PlayerNode;
-    
-    for (int i = 0; i < EntityUsedCount; i++)
-    {
-        entity *E = World->Entities + i;
-        if (E->Type == ENTITY_NPC)
-        {
-            entity_queue_node Node;
-            Node.Entity = E;
-            Node.QueuePosition = 0;
-            World->EntityTurnQueue[World->TurnQueueEnd++] = Node;
-        }
-    }
+inline entity *
+EntityTurnQueuePeek(world *World)
+{
+    return World->EntityTurnQueue->Entity;
 }
 
 entity *
-PopEntityFromTurnQueue(world *World)
+EntityTurnQueuePop(world *World)
 {
-    entity_queue_node *Node = World->EntityTurnQueue + World->TurnQueueStart++;
-    World->TurnQueueStart = World->TurnQueueStart % World->TurnQueueMax;
+    entity_queue_node *TopNode = World->EntityTurnQueue;
 
-    int CostToConsume = Node->LeftoverCost;
+    entity *TopEntity = TopNode->Entity;
+    int CostToConsume = TopNode->LeftoverCost;
 
-    if (World->TurnQueueStart < World->TurnQueueEnd)
+    for (int I = 0; I < World->TurnQueueCount - 1; I++)
     {
-        for (int I = World->TurnQueueStart; I < World->TurnQueueEnd; I++)
-        {
-            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
-        }
+        World->EntityTurnQueue[I] = World->EntityTurnQueue[I + 1];
+        World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
     }
-    else
-    {
-        for (int I = World->TurnQueueStart; I < World->TurnQueueMax; I++)
-        {
-            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
-        }
+    World->TurnQueueCount--;
 
-        for (int I = 0; I < World->TurnQueueEnd; I++)
-        {
-            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
-        }
-    }
+    return TopEntity;
 }
 
 void
-InsertEntityToTurnQueue(world *World, entity *Entity)
+EntityTurnQueueInsert(world *World, entity *Entity, int NewCostOwed)
 {
-    Assert(World->EntityTurnStart != World->EntityTurnEnd);
-
-    if (World->TurnQueueStart < World->TurnQueueEnd)
+    Assert(World->TurnQueueCount < World->TurnQueueMax);
+    int InsertI;
+    for (InsertI = World->TurnQueueCount - 1; InsertI >= 0; InsertI--)
     {
-        int InsertI;
-        for (InsertI = World->TurnQueueEnd; InsertI >= World->TurnQueueStart; InsertI--)
+        if (World->EntityTurnQueue[InsertI].LeftoverCost <= NewCostOwed)
         {
-            if (World->EntityTurnQueue[InsertI].LeftoverCost <= Entity->ActionCost)
-            {
-                break;
-            }
-        }
-        InsertI++;
-
-        for (int I = World->TurnQueueEnd - 1; I >= InsertI; I--)
-        {
-            int NextI = ((I + 1) >= World->TurnQueueMax) ? 0 : (I + 1);
-            World->EntityTurnQueue[NextI] = World->EntityTurnQueue[I];
+            break;
         }
     }
-    else
-    {
-        int InsertI;
-        for (InsertI = 0; InsertI < World->TurnQueueEnd; InsertI++)
-        {
-            if (World->EntityTurnQueue[InsertI].LeftoverCost <= Entity->ActionCost)
-            {
-                break;
-            }
-        }
-        
-        for (int I = World->TurnQueueStart; I < World->TurnQueueMax; I++)
-        {
-            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
-        }
+    InsertI++;
 
-        for (int I = 0; I < World->TurnQueueEnd; I++)
+    for (int ShiftI = World->TurnQueueCount - 1; ShiftI >= InsertI; ShiftI--)
+    {
+        World->EntityTurnQueue[ShiftI + 1] = World->EntityTurnQueue[ShiftI];
+    }
+    World->TurnQueueCount++;
+
+    World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
+}
+
+void
+EntityTurnQueuePopAndReinsert(world *World, int NewCostOwed)
+{
+    entity *Entity = World->EntityTurnQueue->Entity;
+    int CostToConsume = World->EntityTurnQueue->LeftoverCost;
+    
+    int InsertI;
+    for (InsertI = World->TurnQueueCount - 1; InsertI > 0; InsertI--)
+    {
+        World->EntityTurnQueue[InsertI].LeftoverCost -= CostToConsume;
+        if (World->EntityTurnQueue[InsertI].LeftoverCost <= NewCostOwed)
         {
-            World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+            // NOTE: Set cost back up, because it will be subtracted again in the next for loop
+            World->EntityTurnQueue[InsertI].LeftoverCost += CostToConsume;
+            break;
         }
     }
 
-    World->TurnQueueEnd++;
-    World->TurnQueueEnd = World->TurnQueueEnd % World->TurnQueueMax;
+    for (int I = 0; I < InsertI; I++)
+    {
+        World->EntityTurnQueue[I] = World->EntityTurnQueue[I + 1];
+        World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
+    }
+
+    World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
+}
+
+void
+EntityTurnQueueDelete(world *World, entity *Entity)
+{
+    int ToDeleteI;
+    for (ToDeleteI = 0; ToDeleteI < World->TurnQueueCount; ToDeleteI++)
+    {
+        if (World->EntityTurnQueue[ToDeleteI].Entity == Entity)
+        {
+            break;
+        }
+    }
+
+    for (int ShiftI = ToDeleteI; ShiftI < World->TurnQueueCount - 1; ShiftI++)
+    {
+        World->EntityTurnQueue[ShiftI] = World->EntityTurnQueue[ShiftI + 1];
+    }
+    World->TurnQueueCount--;
 }

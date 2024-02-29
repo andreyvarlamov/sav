@@ -15,99 +15,13 @@
 
 #include <cstdio>
 
-static_g int gWorldWidth = 100;
-static_g int gWorldHeight = 100;
-
-static_g u8 gWorldWalls[] = {
-    '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','#','.','.','.','.','.','.','.','.','#','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','#','#','.','.','.','.','.','#','#','#','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','#','.','.','#','#','#','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','#','#','#','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','#','#','#','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','#','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','.','#',
-    '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#',
-};
-
-#if 1
-static_g u8 gWorldTiles[] = {
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 
-    46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 46, 
-    46, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 254, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 254, 46, 46, 
-    46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 254, 46, 46, 46, 254, 254, 46, 46, 46, 46, 254, 46, 46, 46, 247, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 46, 46, 247, 247, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 254, 254, 46, 46, 247, 247, 247, 247, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 247, 247, 247, 247, 247, 247, 46, 46, 46, 46, 
-    46, 46, 254, 46, 46, 46, 46, 46, 254, 254, 254, 254, 46, 46, 247, 247, 247, 247, 247, 247, 247, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 254, 254, 46, 46, 46, 46, 46, 247, 247, 247, 247, 247, 247, 46, 46, 46, 
-    46, 46, 46, 46, 254, 254, 254, 254, 254, 46, 46, 254, 46, 46, 46, 46, 46, 247, 247, 247, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 247, 247, 247, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-};
-#else
-static_g u8 gWorldTiles[] = {
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-    46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 46, 
-};
-#endif
-
 enum { DARKNESS_UNSEEN = 255, DARKNESS_SEEN = 180, DARKNESS_IN_VIEW = 0 };
 
 void
-UpdateCameraToWorldTarget(camera_2d *Camera, world World, vec2i WorldP)
+UpdateCameraToWorldTarget(camera_2d *Camera, world *World, vec2i WorldP)
 {
-    f32 TargetPxX = (f32) WorldP.X * World.TilePxW + World.TilePxW / 2.0f;
-    f32 TargetPxY = (f32) WorldP.Y * World.TilePxH + World.TilePxH / 2.0f;
+    f32 TargetPxX = (f32) WorldP.X * World->TilePxW + World->TilePxW / 2.0f;
+    f32 TargetPxY = (f32) WorldP.Y * World->TilePxH + World->TilePxH / 2.0f;
     Camera->Target = Vec2(TargetPxX, TargetPxY);
 }
 
@@ -200,20 +114,11 @@ DrawGround(game_state *GameState)
                     
                     switch (GameState->World.Tiles[WorldI])
                     {
-                       case 254:
-                       {
-                           if (GroundVariant != 2) continue;
-                       } break;
-
-                       case 247:
-                       {
-                           if (GroundVariant != 3) continue;
-                       } break;
-
-                       default:
-                       {
-                           if (GroundVariant != 2) continue;
-                       } break;
+                        case TILE_STONE:
+                        default:
+                        {
+                            if (GroundVariant != 2) continue;
+                        } break;
                     }
                         
                     vec2i WorldP = IdxToXY(WorldI, GameState->World.Width);
@@ -494,6 +399,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 {
     game_state *GameState = (game_state *) GameMemory.Data;
 
+    b32 FirstFrame = false;
+
     // SECTION: Init
     
     if (!GameState->IsInitialized)
@@ -544,7 +451,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         GenerateWorld(GameState);
 
-        UpdateCameraToWorldTarget(&GameState->Camera, GameState->World, GameState->PlayerEntity->Pos);
+        UpdateCameraToWorldTarget(&GameState->Camera, &GameState->World, GameState->World.PlayerEntity->Pos);
 
         int GroundPointsWidth = 32;
         int GroundPointsHeight = 40;
@@ -570,6 +477,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->GroundRots[i] = Vec2(SpriteRot, VigRot);
         }
 
+        FirstFrame = true;
+
         GameState->IsInitialized = true;
     }
 
@@ -589,6 +498,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
     // SECTION: First updates
 
+    world *World = &GameState->World;
+
     MemoryArena_Reset(&GameState->TrArenaA);
     if (WindowSizeChanged())
     {
@@ -607,127 +518,173 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (MouseWheel() != 0) CameraIncreaseLogZoomSteps(&GameState->Camera, MouseWheel());
     if (MouseDown(SDL_BUTTON_MIDDLE)) GameState->Camera.Target -= CameraScreenToWorldRel(&GameState->Camera, GetMouseRelPos());
 
-    vec2i RequestedPlayerDP = Vec2I();
-    b32 RequestedPlayerTurnSkip = false;
-    if (KeyPressedOrRepeat(SDL_SCANCODE_Q)) RequestedPlayerDP = Vec2I(-1, -1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_W)) RequestedPlayerDP = Vec2I( 0, -1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_E)) RequestedPlayerDP = Vec2I( 1, -1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_A)) RequestedPlayerDP = Vec2I(-1,  0);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_X)) RequestedPlayerDP = Vec2I( 0,  1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_D)) RequestedPlayerDP = Vec2I( 1,  0);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_Z)) RequestedPlayerDP = Vec2I(-1,  1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_C)) RequestedPlayerDP = Vec2I( 1,  1);
-    if (KeyPressedOrRepeat(SDL_SCANCODE_S)) RequestedPlayerTurnSkip = true;
+    vec2i PlayerRequestedDP = Vec2I();
+    b32 PlayerRequestedSkipTurn = false;
+    if (KeyPressedOrRepeat(SDL_SCANCODE_Q)) PlayerRequestedDP = Vec2I(-1, -1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_W)) PlayerRequestedDP = Vec2I( 0, -1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_E)) PlayerRequestedDP = Vec2I( 1, -1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_A)) PlayerRequestedDP = Vec2I(-1,  0);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_X)) PlayerRequestedDP = Vec2I( 0,  1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_D)) PlayerRequestedDP = Vec2I( 1,  0);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_Z)) PlayerRequestedDP = Vec2I(-1,  1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_C)) PlayerRequestedDP = Vec2I( 1,  1);
+    if (KeyPressedOrRepeat(SDL_SCANCODE_S)) PlayerRequestedSkipTurn = true;
+
+    b32 EntityPositionsChanged = false;
+
+    if (KeyPressed(SDL_SCANCODE_F))
+    {
+        GameState->IgnoreFieldOfView = !GameState->IgnoreFieldOfView;
+        EntityPositionsChanged = true;
+    }
 
     // SECTION: Game logic
-
-    b32 PlayerTookTurn = false;
-    if (RequestedPlayerTurnSkip)
-    {
-        PlayerTookTurn = true;
-    }
-    else if (RequestedPlayerDP.X != 0 || RequestedPlayerDP.Y != 0)
-    {
-        vec2i NewP = GameState->PlayerEntity->Pos + RequestedPlayerDP;
-        if (MoveEntity(&GameState->World, GameState->PlayerEntity, NewP))
-        {
-            PlayerTookTurn = true;
-            UpdateCameraToWorldTarget(&GameState->Camera, GameState->World, NewP);
-        }
-    }
 
     if (KeyPressed(SDL_SCANCODE_B))
     {
         Breakpoint;
     }
 
-    // TODO: Optimize when we recalculate field of view
-    // TODO: Optimize by spinning through entities and making a map of occupied tiles before hand
-    // TODO: Optimize by only calculating entity fov if player is in (some) range
-    for (int i = 0; i < GameState->World.EntityUsedCount; i++)
-    {
-        entity *Entity = GameState->World.Entities + i;
-        if ((Entity->Type == ENTITY_PLAYER || Entity->Type == ENTITY_NPC) && Entity->FieldOfView != NULL && Entity->ViewRange > 1)
-        {
-            memset(Entity->FieldOfView, 0, GameState->World.Width * GameState->World.Height * sizeof(Entity->FieldOfView[0]));
-            CalculateLineOfSight(&GameState->World, Entity->Pos, Entity->FieldOfView, Entity->ViewRange);
-        }
-    }
+    entity *ActiveEntity = EntityTurnQueuePeek(&GameState->World);
 
-    static_i b32 IgnoreFieldOfView = false;
-    if (KeyPressed(SDL_SCANCODE_F))
+    if (ActiveEntity == World->PlayerEntity)
     {
-        IgnoreFieldOfView = !IgnoreFieldOfView;
-    }
-    
-    for (int i = 0; i < GameState->World.Width * GameState->World.Height; i++)
-    {
-        if (GameState->World.DarknessLevels[i] == DARKNESS_IN_VIEW)
+        if (PlayerRequestedDP.X != 0 || PlayerRequestedDP.Y != 0 || PlayerRequestedSkipTurn)
         {
-            GameState->World.DarknessLevels[i] = DARKNESS_SEEN;
-        }
+            TraceLog("");
+            TraceLog("-------------Player makes a move--------------");
 
-        if (IgnoreFieldOfView || GameState->PlayerEntity->FieldOfView == 0 || GameState->PlayerEntity->FieldOfView[i] == 1)
-        {
-            GameState->World.DarknessLevels[i] = DARKNESS_IN_VIEW;
-        }
-    }
-
-    if (PlayerTookTurn)
-    {
-        for (int i = 0; i < GameState->World.EntityUsedCount; i++)
-        {
-            entity *Entity = GameState->World.Entities + i;
-            if (Entity->Type == ENTITY_NPC)
+            if (PlayerRequestedDP.X != 0 || PlayerRequestedDP.Y != 0)
             {
-#if 0
-                int ShouldMove = GetRandomValue(0, 12); if (ShouldMove >= 6) {int RandDir = GetRandomValue(0, 4); vec2i NewEntityP = Entity->Pos; switch (RandDir) {case 0: {NewEntityP += Vec2I(0, -1);} break; case 1: {NewEntityP += Vec2I(1, 0);} break; case 2: {NewEntityP += Vec2I(0, 1);} break; case 3: {NewEntityP += Vec2I(-1, 0);} break; default: break;} MoveEntity(&GameState->World, Entity, NewEntityP);}
-#elif 1
-                if (Entity->FieldOfView != NULL && IsInFOV(&GameState->World, Entity->FieldOfView, GameState->PlayerEntity->Pos))
+                vec2i NewP = World->PlayerEntity->Pos + PlayerRequestedDP;
+                if (MoveEntity(World, World->PlayerEntity, NewP))
                 {
-                    path_result Path = CalculatePath(&GameState->World,
-                                                     Entity->Pos, GameState->PlayerEntity->Pos,
-                                                     &GameState->TrArenaA, &GameState->TrArenaB,
-                                                     0);
-
-                    if (Path.FoundPath && Path.Path)
-                    {
-                        vec2i NewEntityP = Path.Path[0];
-                        MoveEntity(&GameState->World, Entity, NewEntityP);
-                    }
+                    UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
                 }
-#endif
+            }
+
+            EntityPositionsChanged = true;
+
+            EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
+            ActiveEntity = EntityTurnQueuePeek(World);
+        }
+    }
+
+    entity *StartingEntity = ActiveEntity;
+    while (ActiveEntity != World->PlayerEntity)
+    {
+        if (ActiveEntity->Type == ENTITY_NPC)
+        {
+            // TODO: Optimize by only calculating entity fov if player is in (some) range
+            if (ActiveEntity->Type == ENTITY_NPC && ActiveEntity->FieldOfView != NULL && ActiveEntity->ViewRange > 1)
+            {
+                memset(ActiveEntity->FieldOfView, 0, World->Width * World->Height * sizeof(ActiveEntity->FieldOfView[0]));
+                CalculateLineOfSight(World, ActiveEntity->Pos, ActiveEntity->FieldOfView, ActiveEntity->ViewRange);
+            }
+            
+            if (ActiveEntity->FieldOfView != NULL && IsInFOV(World, ActiveEntity->FieldOfView, World->PlayerEntity->Pos) &&
+                EntityExists(World->PlayerEntity))
+            {
+                path_result Path = CalculatePath(World,
+                                                 ActiveEntity->Pos, World->PlayerEntity->Pos,
+                                                 &GameState->TrArenaA, &GameState->TrArenaB,
+                                                 0);
+
+                if (Path.FoundPath && Path.Path)
+                {
+                    vec2i NewEntityP = Path.Path[0];
+                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP);
+                }
+            }
+            else
+            {
+                int ShouldMove = GetRandomValue(0, 12);
+                if (ShouldMove >= 6)
+                {
+                    int RandDir = GetRandomValue(0, 4);
+                    vec2i NewEntityP = ActiveEntity->Pos;
+                    switch (RandDir) {
+                        case 0: {
+                            NewEntityP += Vec2I(0, -1);
+                        } break;
+                        case 1:
+                        {
+                            NewEntityP += Vec2I(1, 0);
+                        } break;
+                        case 2:
+                        {
+                            NewEntityP += Vec2I(0, 1);
+                        } break;
+                        case 3:
+                        {
+                            NewEntityP += Vec2I(-1, 0);
+                        } break;
+                        default: break;
+                    }
+
+                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP);
+                }
+            }
+        }
+        
+        EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
+        ActiveEntity = EntityTurnQueuePeek(World);
+
+        if (ActiveEntity == StartingEntity)
+        {
+            break;
+        }
+    }
+
+    if (EntityPositionsChanged || FirstFrame)
+    {
+        if (!GameState->IgnoreFieldOfView)
+        {
+            memset(World->PlayerEntity->FieldOfView, 0, World->Width * World->Height * sizeof(World->PlayerEntity->FieldOfView[0]));
+            CalculateLineOfSight(World, World->PlayerEntity->Pos, World->PlayerEntity->FieldOfView, World->PlayerEntity->ViewRange);
+        }
+    
+        for (int i = 0; i < World->Width * World->Height; i++)
+        {
+            if (World->DarknessLevels[i] == DARKNESS_IN_VIEW)
+            {
+                World->DarknessLevels[i] = DARKNESS_SEEN;
+            }
+
+            if (GameState->IgnoreFieldOfView || World->PlayerEntity->FieldOfView == 0 || World->PlayerEntity->FieldOfView[i] == 1)
+            {
+                World->DarknessLevels[i] = DARKNESS_IN_VIEW;
             }
         }
     }
-
+ 
     // SECTION: End of frame logic
 
 #ifdef SAV_DEBUG    
     entity **CharEntities;
     int Count;
-    GetAllCharacterEntities(&GameState->World, &GameState->TrArenaA, &CharEntities, &Count);
+    GetAllCharacterEntities(World, &GameState->TrArenaA, &CharEntities, &Count);
 
     Noop;
 
     Assert(ValidateEntitySpatialPartition(&GameState->World));
 #endif
     
-    for (int i = 0; i < GameState->World.EntityUsedCount; i++)
+    for (int i = 0; i < World->EntityUsedCount; i++)
     {
-        entity *Entity = GameState->World.Entities + i;
+        entity *Entity = World->Entities + i;
 
         if (EntityExists(Entity) && Entity->Health <= 0.0f)
         {
-            DeleteEntity(&GameState->World, Entity);
+            EntityTurnQueueDelete(World, Entity);
+            DeleteEntity(World, Entity);
         }
     }
-
 
     vec2 MouseP = GetMousePos();
     vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
     vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
-
+    
     // SECTION: Render
     
     // NOTE: Draw debug overlay
@@ -752,7 +709,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             if (Entity->Type == ENTITY_NPC)
             {
                 path_result Path = CalculatePath(&GameState->World,
-                                                 Entity->Pos, GameState->PlayerEntity->Pos,
+                                                 Entity->Pos, World->PlayerEntity->Pos,
                                                  &GameState->TrArenaA, &GameState->TrArenaB,
                                                  0);
 

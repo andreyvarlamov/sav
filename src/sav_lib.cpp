@@ -505,6 +505,11 @@ EndFrameTiming()
         u64 CounterElapsed = SDL_GetPerformanceCounter() - SdlState->LastCounter;
         f64 ElapsedMS = (f64) CounterElapsed / SdlState->PerfCounterFreq;
 
+#if 0
+        f64 FrameTimeUtilization = ElapsedMS / SdlState->TargetDelta;
+        TraceLog("Frame time utilization: %f", FrameTimeUtilization * 100.0);
+#endif
+
         u64 TargetElapsed = (u64)(SdlState->TargetDelta * SdlState->PerfCounterFreq);
 
         int SleepForMS = (int) (1000.0*(SdlState->TargetDelta - ElapsedMS)) - 2;

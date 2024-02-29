@@ -40,8 +40,8 @@ struct entity
     vec2i Pos;
     f32 Health;
     f32 MaxHealth;
-    u32 Flags;
     int ActionCost;
+    u32 Flags;
 
     int ViewRange;
     u8 *FieldOfView;
@@ -75,9 +75,10 @@ struct world
     entity **SpatialEntities;
 
     entity_queue_node *EntityTurnQueue;
-    int TurnQueueStart;
-    int TurnQueueEnd;
+    int TurnQueueCount;
     int TurnQueueMax;
+
+    entity *PlayerEntity;
 };
 
 struct collision_info
@@ -114,11 +115,11 @@ struct game_state
 
     world World;
 
-    entity *PlayerEntity;
-
     vec2 *GroundPoints;
     vec2 *GroundRots;
     int GroundPointCount;
+
+    b32 IgnoreFieldOfView;
 };
 
 inline vec2i IdxToXY(int I, int Width) { return Vec2I(I % Width, I / Width); }
