@@ -4,7 +4,6 @@
 #include "va_types.h"
 #include "va_math.h"
 #include "va_colors.h"
-#include "va_rect.h"
 
 // NOTE: All mat functions assume Column-Major representation [Column][Row]
 
@@ -22,136 +21,28 @@ union vec2
     f32 E[2];
 };
 
-inline vec2
-Vec2()
-{
-    vec2 Result = {};
-    return Result;
-}
+inline vec2 Vec2() { return { 0.0f, 0.0f }; }
+inline vec2 Vec2(f32 X, f32 Y) { return { X, Y }; }
+inline vec2 Vec2(int X, int Y) { return { (f32) X, (f32) Y }; }
+inline vec2 Vec2(f32 V) { return { V, V }; }
 
-inline vec2
-Vec2(f32 X, f32 Y)
-{
-    vec2 Result = {};
+inline vec2 operator+(vec2 V0, vec2 V1) { return { V0.X + V1.X, V0.Y + V1.Y }; }
+inline vec2 operator-(vec2 V0, vec2 V1) { return { V0.X - V1.X, V0.Y - V1.Y }; }
+inline vec2 operator-(vec2 V0) { return { -V0.X, -V0.Y }; }
+inline vec2 operator*(vec2 V, f32 S) { return { V.X * S, V.Y * S }; }
+inline vec2 operator*(f32 S, vec2 V) { return { V.X * S, V.Y * S }; }
+inline vec2 operator*(vec2 V0, vec2 V1) { return { V0.X * V1.X, V0.Y * V1.Y }; }
+inline vec2 operator/(vec2 V, f32 S) { return { V.X / S, V.Y / S }; }
+inline vec2 &operator+=(vec2 &V0, vec2 V1) { V0 = V0 + V1; return V0; }
+inline vec2 &operator-=(vec2 &V0, vec2 V1) { V0 = V0 - V1; return V0; }
+inline vec2 &operator*=(vec2 &V, f32 S) { V = V * S; return V; }
+inline vec2 &operator/=(vec2 &V, f32 S) { V = V / S; return V; }
+inline f32 VecDot(vec2 V0, vec2 V1) { return V0.X * V1.X + V0.Y * V1.Y; }
+inline f32 VecLengthSq(vec2 V) { return V.X * V.X + V.Y * V.Y; }
+inline f32 VecLength(vec2 V) { return SqrtF(V.X * V.X + V.Y * V.Y); }
+inline vec2 VecNormalize(vec2 V) { f32 Length = VecLength(V); Assert(Length > 0.0f); return { V.X / Length, V.Y / Length }; }
 
-    Result.X = X;
-    Result.Y = Y;
-
-    return Result;
-}
-
-inline vec2
-Vec2(int X, int Y)
-{
-    vec2 Result = {};
-    Result.X = (f32) X;
-    Result.Y = (f32) Y;
-    return Result;
-}
-
-inline vec2
-Vec2(f32 V)
-{
-    vec2 Result = Vec2(V, V);
-    return Result;
-}
-
-inline vec2
-operator+(vec2 V0, vec2 V1)
-{
-    return vec2 { V0.X + V1.X, V0.Y + V1.Y };
-}
-
-inline vec2
-operator-(vec2 V0, vec2 V1)
-{
-    return vec2 { V0.X - V1.X, V0.Y - V1.Y };
-}
-
-inline vec2
-operator-(vec2 V0)
-{
-    return vec2 { -V0.X, -V0.Y };
-}
-
-inline vec2
-operator*(vec2 V, f32 S)
-{
-    return vec2 { V.X * S, V.Y * S };
-}
-
-inline  vec2
-operator*(f32 S, vec2 V)
-{
-    return vec2 { V.X * S, V.Y * S };
-}
-
-inline vec2
-operator*(vec2 V0, vec2 V1)
-{
-    vec2 Result = Vec2(V0.X * V1.X, V0.Y * V1.Y);
-    return Result;
-}
-
-inline vec2
-operator/(vec2 V, f32 S)
-{
-    return vec2 { V.X / S, V.Y / S };
-}
-
-inline vec2 &
-operator+=(vec2 &V0, vec2 V1)
-{
-    V0 = V0 + V1;
-    return V0;
-}
-
-inline vec2 &
-operator-=(vec2 &V0, vec2 V1)
-{
-    V0 = V0 - V1;
-    return V0;
-}
-
-inline vec2 &
-operator*=(vec2 &V, f32 S)
-{
-    V = V * S;
-    return V;
-}
-
-inline vec2 &
-operator/=(vec2 &V, f32 S)
-{
-    V = V / S;
-    return V;
-}
-
-inline f32
-VecDot(vec2 V0, vec2 V1)
-{
-    return (V0.X * V1.X + V0.Y * V1.Y);
-}
-
-inline f32
-VecLengthSq(vec2 V)
-{
-    return VecDot(V, V);
-}
-
-inline f32
-VecLength(vec2 V)
-{
-    return SqrtF(VecLengthSq(V));
-}
-
-inline vec2
-VecNormalize(vec2 V)
-{
-    f32 Length = VecLength(V);
-    return ((Length != 0.0f) ? (V / Length) : V);
-}
-
+// TODO: VecClamp is inefficient (still want to be fast ish in debug)
 inline vec2
 VecClamp(vec2 V, vec2 Min, vec2 Max)
 {
@@ -159,30 +50,12 @@ VecClamp(vec2 V, vec2 Min, vec2 Max)
     if (V.Y < Min.Y) V.Y = Min.Y; else if (V.Y > Max.Y) V.Y = Max.Y;
     return V;
 }
-
-inline vec2
-VecClamp(vec2 V, f32 Min, f32 Max)
-{
-    vec2 Result = VecClamp(V, Vec2(Min), Vec2(Max));
-    return Result;
-}
-
-inline vec2
-VecClamp(vec2 V, vec2 Abs)
-{
-    vec2 Result = VecClamp(V, -Abs, Abs);
-    return Result;
-}
-
-inline vec2
-VecClamp(vec2 V, f32 Abs)
-{
-    vec2 Result = VecClamp(V, -Abs, Abs);
-    return Result;
-}
+inline vec2 VecClamp(vec2 V, f32 Min, f32 Max) { return VecClamp(V, Vec2(Min), Vec2(Max)); }
+inline vec2 VecClamp(vec2 V, vec2 Abs) { return VecClamp(V, -Abs, Abs); }
+inline vec2 VecClamp(vec2 V, f32 Abs) { return VecClamp(V, -Abs, Abs); }
 
 // -------------------------------------------------------------------------------
-// VECTOR 3 ----------------------------------------------------------------------
+// SECTION: VECTOR 3 -------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
 union vec3
@@ -200,176 +73,32 @@ union vec3
     f32 E[3];
 };
 
-inline vec3
-Vec3()
-{
-    vec3 Result = {};
-    return Result;
-}
+inline vec3 Vec3() { return { 0.0f, 0.0f, 0.0f }; }
+inline vec3 Vec3(f32 X, f32 Y, f32 Z) { return { X, Y, Z}; }
+inline vec3 Vec3(f32 Value) { return { Value, Value, Value }; }
+inline vec3 Vec3(vec2 V, f32 Z) { return { V.X, V.Y, Z }; }
+inline vec3 Vec3(vec2 V) { return { V.X, V.Y, 0.0f }; }
+inline vec2 Vec2(vec3 V) { return { V.X, V.Y }; }
+inline vec3 operator+(vec3 V0, vec3 V1) { return { V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z }; }
+inline vec3 operator-(vec3 V0, vec3 V1) { return { V0.X - V1.X, V0.Y - V1.Y, V0.Z - V1.Z }; }
+inline vec3 operator-(vec3 V0) { return { -V0.X, -V0.Y, -V0.Z }; }
+inline vec3 operator*(vec3 V0, vec3 V1) { return { V0.X * V1.X, V0.Y * V1.Y, V0.Z * V1.Z }; }
+inline vec3 operator*(vec3 V, f32 S) { return { V.X * S, V.Y * S, V.Z * S }; }
+inline vec3 operator*(f32 S, vec3 V) { return { V.X * S, V.Y * S, V.Z * S }; }
+inline vec3 operator/(vec3 V, f32 S) { return { V.X / S, V.Y / S, V.Z / S }; }
+inline vec3 operator/(f32 S, vec3 V) { return { S / V.X, S / V.Y, S / V.Z }; }
+inline vec3 &operator+=(vec3 &V0, vec3 V1) { V0 = V0 + V1; return V0; }
+inline vec3 &operator-=(vec3 &V0, vec3 V1) { V0 = V0 - V1; return V0; }
+inline vec3 &operator*=(vec3 &V, f32 S) { V = V * S; return V; }
+inline vec3 &operator/=(vec3 &V, f32 S) { V = V / S; return V; }
 
-inline vec3
-Vec3(f32 X, f32 Y, f32 Z)
-{
-    vec3 Result = {};
-
-    Result.X = X;
-    Result.Y = Y;
-    Result.Z = Z;
-
-    return Result;
-}
-
-inline vec3
-Vec3(f32 Value)
-{
-    vec3 Result = Vec3(Value, Value, Value);
-    return Result;
-}
-
-inline vec3
-Vec3(vec2 V, f32 Z)
-{
-    vec3 Result = Vec3(V.X, V.Y, Z);
-    return Result;
-}
-
-inline vec3
-Vec3(vec2 V)
-{
-    vec3 Result = Vec3(V, 0);
-    return Result;
-}
-
-inline vec2
-Vec2(vec3 V)
-{
-    vec2 Result = Vec2(V.X, V.Y);
-    return Result;
-}
-
-inline vec3
-operator+(vec3 V0, vec3 V1)
-{
-    return vec3 { V0.X + V1.X, V0.Y + V1.Y, V0.Z + V1.Z };
-}
-
-inline vec3
-operator-(vec3 V0, vec3 V1)
-{
-    return vec3 { V0.X - V1.X, V0.Y - V1.Y, V0.Z - V1.Z };
-}
-
-inline vec3
-operator-(vec3 V0)
-{
-    return vec3 { -V0.X, -V0.Y, -V0.Z };
-}
-
-inline vec3
-operator*(vec3 V, f32 S)
-{
-    return vec3 { V.X * S, V.Y * S, V.Z * S };
-}
-
-inline vec3
-operator*(f32 S, vec3 V)
-{
-    return vec3 { V.X * S, V.Y * S, V.Z * S };
-}
-
-inline vec3
-operator/(vec3 V, f32 S)
-{
-    return vec3 { V.X / S, V.Y / S, V.Z / S };
-}
-
-inline vec3
-operator/(f32 S, vec3 V)
-{
-    return vec3 { S / V.X, S / V.Y, S / V.Z };
-}
-
-inline vec3 &
-operator+=(vec3 &V0, vec3 V1)
-{
-    V0 = V0 + V1;
-    return V0;
-}
-
-inline vec3 &
-operator-=(vec3 &V0, vec3 V1)
-{
-    V0 = V0 - V1;
-    return V0;
-}
-
-inline vec3 &
-operator*=(vec3 &V, f32 S)
-{
-    V = V * S;
-    return V;
-}
-
-inline vec3 &
-operator/=(vec3 &V, f32 S)
-{
-    V = V / S;
-    return V;
-}
-
-inline f32
-VecDot(vec3 V0, vec3 V1)
-{
-    return (V0.X * V1.X + V0.Y * V1.Y + V0.Z * V1.Z);
-}
-
-inline f32
-VecLengthSq(vec3 V)
-{
-    return VecDot(V, V);
-}
-
-inline f32
-VecLength(vec3 V)
-{
-    return SqrtF(VecLengthSq(V));
-}
-
-inline vec3
-VecNormalize(vec3 V)
-{
-    f32 Length = VecLength(V);
-    return ((Length != 0.0f) ? (V / Length) : V);
-}
-
-inline vec3
-VecCross(vec3 V0, vec3 V1)
-{
-    return vec3 { V0.Y * V1.Z - V0.Z * V1.Y,
-        V0.Z * V1.X - V0.X * V1.Z,
-        V0.X * V1.Y - V0.Y * V1.X };
-}
-
-inline f32
-VecScalarTriple(vec3 A, vec3 B, vec3 C)
-{
-    return VecDot(A, VecCross(B, C));
-}
-
-inline vec3
-VecHadamard(vec3 V0, vec3 V1)
-{
-    vec3 Result = Vec3(V0.X * V1.X, V0.Y * V1.Y, V0.Z * V1.Z);
-    return Result;
-}
-
-inline b32
-IsZeroVector(vec3 Vector)
-{
-    return ((AbsF(Vector.X) <= FLT_EPSILON) &&
-            (AbsF(Vector.Y) <= FLT_EPSILON) &&
-            (AbsF(Vector.Z) <= FLT_EPSILON));
-}
+inline f32 VecDot(vec3 V0, vec3 V1) { return V0.X * V1.X + V0.Y * V1.Y + V0.Z * V1.Z; }
+inline f32 VecLengthSq(vec3 V) { return V.X * V.X + V.Y * V.Y + V.Z * V.Z; }
+inline f32 VecLength(vec3 V) { return SqrtF(V.X * V.X + V.Y * V.Y + V.Z * V.Z); }
+inline vec3 VecNormalize(vec3 V) { f32 Length = SqrtF(V.X * V.X + V.Y * V.Y + V.Z * V.Z); Assert(Length > 0.0f); return { V.X / Length, V.Y / Length, V.Z / Length }; } 
+inline vec3 VecCross(vec3 V0, vec3 V1) { return { V0.Y * V1.Z - V0.Z * V1.Y, V0.Z * V1.X - V0.X * V1.Z, V0.X * V1.Y - V0.Y * V1.X }; }
+inline f32 VecScalarTriple(vec3 A, vec3 B, vec3 C) { return VecDot(A, VecCross(B, C)); }
+inline b32 IsZeroVector(vec3 Vector) { return ((AbsF(Vector.X) <= FLT_EPSILON) && (AbsF(Vector.Y) <= FLT_EPSILON) && (AbsF(Vector.Z) <= FLT_EPSILON)); }
 
 inline b32
 AreVecEqual(vec3 A, vec3 B)
@@ -385,32 +114,49 @@ Vec3Lerp(vec3 A, vec3 B, f32 LerpFactor)
     return Result;
 }
 
-// NOTE: Rect-V2/V3 helpers
+// -------------------------------------------------------------------------------
+// SECTION: RECTANGLE ------------------------------------------------------------
+// -------------------------------------------------------------------------------
 
-inline rect Rect(vec2 Dim) { return Rect(0.0f, 0.0f, Dim.X, Dim.Y); }
-inline rect Rect(vec2 Min, vec2 Dim) { return Rect(Min.X, Min.Y, Dim.X, Dim.Y); }
-inline rect Rect(f32 X, f32 Y, vec2 Dim) { return Rect(X, Y, Dim.X, Dim.Y); }
-inline rect RectMinMax(vec2 Min, vec2 Max) { return Rect(Min.X, Min.Y, Max.X - Min.X, Max.Y - Min.Y); }
-inline vec2 RectGetMin(rect Rect) { return Vec2(Rect.X, Rect.Y); }
-inline vec2 RectGetMax(rect Rect) { return Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height); }
-inline vec2 RectGetMid(rect Rect) { return Vec2(Rect.X + Rect.Width / 2.0f, Rect.Y + Rect.Height / 2.0f); }
+struct rect
+{
+    f32 X;
+    f32 Y;
+    f32 Width;
+    f32 Height;
+};
+
+inline rect Rect(f32 X, f32 Y, f32 Width, f32 Height) { return { X, Y, Width, Height }; }
+inline rect Rect(f32 Width, f32 Height) { return { 0, 0, Width, Height }; }
+inline rect Rect(f32 Dim) { return { 0, 0, Dim, Dim }; }
+inline rect RectScale(rect R, f32 Scale) { R.Width *= Scale; R.Height *= Scale; return R; }
+inline rect Rect(i32 X, i32 Y, i32 Width, i32 Height) { return { (f32) X, (f32) Y, (f32) Width, (f32) Height }; }
+inline rect Rect(i32 Width, i32 Height) { return { 0.0f, 0.0f, (f32) Width, (f32) Height }; }
+inline rect Rect(i32 Dim) { return { 0.0f, 0.0f, (f32) Dim, (f32) Dim }; }
+inline rect Rect(vec2 Dim) { return { 0.0f, 0.0f, Dim.X, Dim.Y }; }
+inline rect Rect(vec2 Min, vec2 Dim) { return { Min.X, Min.Y, Dim.X, Dim.Y }; }
+inline rect Rect(f32 X, f32 Y, vec2 Dim) { return { X, Y, Dim.X, Dim.Y }; }
+inline rect RectMinMax(vec2 Min, vec2 Max) { return { Min.X, Min.Y, Max.X - Min.X, Max.Y - Min.Y }; }
+inline vec2 RectGetMin(rect Rect) { return { Rect.X, Rect.Y }; }
+inline vec2 RectGetMax(rect Rect) { return { Rect.X + Rect.Width, Rect.Y + Rect.Height }; }
+inline vec2 RectGetMid(rect Rect) { return { Rect.X + Rect.Width / 2.0f, Rect.Y + Rect.Height / 2.0f }; }
 
 inline void
 RectGetPoints(rect Rect, vec2 *Points)
 {
-    Points[0] = Vec2(Rect.X, Rect.Y);
-    Points[1] = Vec2(Rect.X, Rect.Y + Rect.Height);
-    Points[2] = Vec2(Rect.X + Rect.Width, Rect.Y + Rect.Height);
-    Points[3] = Vec2(Rect.X + Rect.Width, Rect.Y);
+    Points[0] = { Rect.X, Rect.Y };
+    Points[1] = { Rect.X, Rect.Y + Rect.Height };
+    Points[2] = { Rect.X + Rect.Width, Rect.Y + Rect.Height };
+    Points[3] = { Rect.X + Rect.Width, Rect.Y };
 }
 
 inline void
 RectGetPoints(rect Rect, vec3 *Points)
 {
-    Points[0] = Vec3(Rect.X, Rect.Y, 0.0f);
-    Points[1] = Vec3(Rect.X, Rect.Y + Rect.Height, 0.0f);
-    Points[2] = Vec3(Rect.X + Rect.Width, Rect.Y + Rect.Height, 0.0f);
-    Points[3] = Vec3(Rect.X + Rect.Width, Rect.Y, 0.0f);
+    Points[0] = { Rect.X, Rect.Y, 0.0f };
+    Points[1] = { Rect.X, Rect.Y + Rect.Height, 0.0f };
+    Points[2] = { Rect.X + Rect.Width, Rect.Y + Rect.Height, 0.0f };
+    Points[3] = { Rect.X + Rect.Width, Rect.Y, 0.0f };
 }
 
 // -------------------------------------------------------------------------------

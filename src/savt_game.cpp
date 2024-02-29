@@ -6,7 +6,6 @@
 #include "va_memarena.h"
 #include "va_linmath.h"
 #include "va_colors.h"
-#include "va_rect.h"
 
 #include <sdl2/SDL_scancode.h>
 #include <sdl2/SDL_mouse.h>

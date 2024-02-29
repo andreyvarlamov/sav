@@ -17,7 +17,7 @@ rem Compiler Options
     rem /Z7 -- Produce full-symbolic debugging information in the .obj files using CodeView format
     rem /Od -- Turn off all optimizations
     rem /Oi -- Generate intrinsic functions
-set copt=/I%incdir% /MDd /nologo /FC /GR- /Z7 /Od /Oi
+set copt=/I%incdir% /MDd /nologo /FC /GR- /Z7 /Od /Oi /Ob1
 
 rem Compiler Warning Options
     rem /WX -- treat warnings as errors

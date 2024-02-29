@@ -4,7 +4,6 @@
 #include "va_types.h"
 #include "va_memarena.h"
 #include "va_linmath.h"
-#include "va_rect.h"
 
 #ifdef SAV_EXPORTS
 #define SAV_API extern "C" __declspec(dllexport)
