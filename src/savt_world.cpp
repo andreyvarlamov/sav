@@ -16,7 +16,7 @@ static_g vec2i DIRECTIONS[] = {
 entity *
 GetEntitiesAt(world *World, vec2i P)
 {
-    if(IsPInBounds(World, P))
+    if(IsPValid(P, World))
     {
         int WorldI = XYToIdx(P, World->Width);
         return World->SpatialEntities[WorldI];
@@ -48,7 +48,7 @@ CheckCollisions(world *World, vec2i P)
 {
     collision_info CI;
     
-    if (IsPInBounds(World, P))
+    if (IsPValid(P, World))
     {
         entity *HeadEntity = GetEntitiesAt(World, P);
 
@@ -90,7 +90,7 @@ CheckCollisions(world *World, vec2i P)
 b32
 IsTileOpaque(world *World, vec2i P)
 {
-    if (IsPInBounds(World, P))
+    if (IsPValid(P, World))
     {
         entity *HeadEntity = GetEntitiesAt(World, P);
 
@@ -121,6 +121,8 @@ void
 AddEntityToSpatial(world *World, vec2i Pos, entity *Entity)
 {
     int WorldI = XYToIdx(Pos, World->Width);
+
+    Assert(IsPValid(Pos, World));
 
     entity *HeadEntity = World->SpatialEntities[WorldI];
     Entity->Next = HeadEntity;
@@ -224,70 +226,79 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 }
 
 b32
-MoveEntity(world *World, entity *Entity, vec2i NewP)
+ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity, world *World)
 {
-    if (Entity->Type > 0)
-    {
-        collision_info Col = CheckCollisions(World, NewP);
-
-        if (Col.Collided)
-        {
-            if (Col.Entity)
-            {
-                Col.Entity->Health -= 3;
+    // TODO: Switch block based on 2 entity types
+    PassiveEntity->Health -= 3;
                 
-                if (Entity == World->PlayerEntity)
-                {
-                    TraceLog("Player hits entity %p. Remaining health: %f", Col.Entity, Col.Entity->Health);
-                }
-                else
-                {
-                    if (Col.Entity == World->PlayerEntity)
-                    {
-                        TraceLog("Entity %p hits player. Remaining health: %f", Entity, Col.Entity->Health);
-                    }
-                    else
-                    {
-                        TraceLog("Entity %p hits entity %p. Remaining health: %f", Entity, Col.Entity, Col.Entity->Health);
-                    }
-                }
-
-                if (Col.Entity->Health <= 0.0f)
-                {
-                    if (Col.Entity == World->PlayerEntity)
-                    {
-                        TraceLog("Player is dead.");
-                    }
-                    else
-                    {
-                        TraceLog("Entity %p is dead.", Col.Entity);
-                    }
-                }
-
-            }
-
-            return false;
+    if (ActiveEntity == World->PlayerEntity)
+    {
+        TraceLog("Player hits entity %p. Remaining health: %f", PassiveEntity, PassiveEntity->Health);
+    }
+    else
+    {
+        if (PassiveEntity == World->PlayerEntity)
+        {
+            TraceLog("Entity %p hits player. Remaining health: %f", ActiveEntity, PassiveEntity->Health);
         }
         else
         {
-            RemoveEntityFromSpatial(World, Entity->Pos, Entity);
-            AddEntityToSpatial(World, NewP, Entity);
-
-            Entity->Pos = NewP;
-            if (Entity == World->PlayerEntity)
-            {
-                TraceLog("Player moves without hitting anyone");
-            }
-            else
-            {
-                TraceLog("Entity %p moves without hitting anyone", Entity);
-            }
-
-            return true;
+            TraceLog("Entity %p hits entity %p. Remaining health: %f", ActiveEntity, PassiveEntity, PassiveEntity->Health);
         }
     }
 
-    return false;
+    if (PassiveEntity->Health <= 0.0f)
+    {
+        if (PassiveEntity == World->PlayerEntity)
+        {
+            TraceLog("Player is dead.");
+        }
+        else
+        {
+            TraceLog("Entity %p is dead.", PassiveEntity);
+        }
+    }
+
+    // NOTE: This will return false if there's a non-attack collision between 2 entities
+    return true;
+}
+
+b32
+MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
+{
+    *Out_TurnUsed = false;
+    
+    Assert(Entity->Type > 0);
+    
+    collision_info Col = CheckCollisions(World, NewP);
+
+    if (Col.Collided)
+    {
+        if (Col.Entity)
+        {
+            *Out_TurnUsed = ResolveEntityCollision(Entity, Col.Entity, World);
+        }
+
+        return false;
+    }
+    else
+    {
+        RemoveEntityFromSpatial(World, Entity->Pos, Entity);
+        AddEntityToSpatial(World, NewP, Entity);
+
+        Entity->Pos = NewP;
+        if (Entity == World->PlayerEntity)
+        {
+            TraceLog("Player moves without hitting anyone");
+        }
+        else
+        {
+            TraceLog("Entity %p moves without hitting anyone", Entity);
+        }
+
+        *Out_TurnUsed = true;
+        return true;
+    }
 }
 
 void
@@ -332,17 +343,32 @@ struct room
     int H;
 };
 
+enum tile_type
+{
+    TILE_NONE = 0,
+    TILE_STONE = 1,
+    TILE_GRASS,
+    TILE_WATER,
+    TILE_COUNT
+};
+
 vec2i
-GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
+GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *TrArena)
 {
     int TileCount = World->Width * World->Height;
+
+    for (int i = 0; i < TileCount; i++)
+    {
+        World->Tiles[i] = TILE_WATER;
+    }
+
     int RoomsMax = 50;
     int SizeMin = 6;
     int SizeMax = 20;
 
-    MemoryArena_Freeze(WorldArena);
+    MemoryArena_Freeze(TrArena);
 
-    room *Rooms = MemoryArena_PushArray(WorldArena, RoomsMax, room);
+    room *Rooms = MemoryArena_PushArray(TrArena, RoomsMax, room);
     int RoomCount = 0;
 
     for (int RoomI = 0; RoomI < RoomsMax; RoomI++)
@@ -368,11 +394,15 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
 
         if (!Intersects)
         {
+            b32 GrassRoom = GetRandomValue(0, 2);
             for (int Y = Room.Y; Y < (Room.Y + Room.H); Y++)
             {
                 for (int X = Room.X; X < (Room.X + Room.W); X++)
                 {
-                    GeneratedMap[XYToIdx(X, Y, World->Width)] = 1;
+                    int Idx = XYToIdx(X, Y, World->Width);
+                    GeneratedMap[Idx] = 1;
+                    World->Tiles[Idx] = (u8) (GrassRoom ? TILE_GRASS : TILE_STONE);
+                    World->TilesInitialized[Idx] = true;
                 }
             }
 
@@ -380,7 +410,7 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
         }
     }
 
-    MemoryArena_ResizePreviousPushArray(WorldArena, RoomCount, room);
+    MemoryArena_ResizePreviousPushArray(TrArena, RoomCount, room);
 
     for (int RoomI = 0; RoomI < RoomCount - 1; RoomI++)
     {
@@ -397,24 +427,48 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
         {
             for (int X = LeftCenter.X; X <= RightCenter.X; X++)
             {
-                GeneratedMap[XYToIdx(X, LeftCenter.Y, World->Width)] = 1;
+                int Idx = XYToIdx(X, LeftCenter.Y, World->Width);
+                if (GeneratedMap[Idx] == 0)
+                {
+                    GeneratedMap[Idx] = 1;
+                    World->Tiles[Idx] = TILE_STONE;
+                    World->TilesInitialized[Idx] = true;
+                }
             }
 
             for (int Y = LeftCenter.Y; Y <= RightCenter.Y; Y++)
             {
-                GeneratedMap[XYToIdx(RightCenter.X, Y, World->Width)] = 1;
+                int Idx = XYToIdx(RightCenter.X, Y, World->Width);
+                if (GeneratedMap[Idx] == 0)
+                {
+                    GeneratedMap[Idx] = 1;
+                    World->Tiles[Idx] = TILE_STONE;
+                    World->TilesInitialized[Idx] = true;
+                }
             }
         }
         else
         {
             for (int X = LeftCenter.X; X <= RightCenter.X; X++)
             {
-                GeneratedMap[XYToIdx(X, RightCenter.Y, World->Width)] = 1;
+                int Idx = XYToIdx(X, RightCenter.Y, World->Width);
+                if (GeneratedMap[Idx] == 0)
+                {
+                    GeneratedMap[Idx] = 1;
+                    World->Tiles[Idx] = TILE_STONE;
+                    World->TilesInitialized[Idx] = true;
+                }
             }
 
             for (int Y = RightCenter.Y; Y <= LeftCenter.Y; Y++)
             {
-                GeneratedMap[XYToIdx(LeftCenter.X, Y, World->Width)] = 1;
+                int Idx = XYToIdx(LeftCenter.X, Y, World->Width);
+                if (GeneratedMap[Idx] == 0)
+                {
+                    GeneratedMap[Idx] = 1;
+                    World->Tiles[Idx] = TILE_STONE;
+                    World->TilesInitialized[Idx] = true;
+                }
             }
         }
     }
@@ -439,18 +493,19 @@ GenerateRoomMap(world *World, u8 *GeneratedMap, memory_arena *WorldArena)
             if (FoundRoomGround)
             {
                 GeneratedMap[TileI] = 2;
+                World->Tiles[TileI] = TILE_STONE;
+                World->TilesInitialized[TileI] = true;
             }
         }
     }
 
     vec2i Room0Center = Vec2I(Rooms[0].X + Rooms[0].W / 2, Rooms[0].Y + Rooms[0].H / 2);
  
-    MemoryArena_Unfreeze(WorldArena);
+    MemoryArena_Unfreeze(TrArena);
 
     return Room0Center;
 }
 
-enum { TILE_STONE = 1 };
 void
 GenerateWorld(game_state *GameState)
 {
@@ -459,9 +514,14 @@ GenerateWorld(game_state *GameState)
     World->Height = 100;
     World->TilePxW = GameState->GlyphAtlas.GlyphPxW;
     World->TilePxH = GameState->GlyphAtlas.GlyphPxH;
-    
+
+    World->TilesInitialized = MemoryArena_PushArrayAndZero(&GameState->WorldArena, World->Width * World->Height, u8);
     World->Tiles = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
     World->DarknessLevels = MemoryArena_PushArray(&GameState->WorldArena, World->Width * World->Height, u8);
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        World->DarknessLevels[i] = DARKNESS_UNSEEN;
+    }
 
     World->EntityUsedCount = 0;
     World->EntityMaxCount = ENTITY_MAX_COUNT;
@@ -473,12 +533,10 @@ GenerateWorld(game_state *GameState)
     World->TurnQueueMax = World->EntityMaxCount;
     World->EntityTurnQueue = MemoryArena_PushArray(&GameState->WorldArena, World->TurnQueueMax, entity_queue_node);
 
-#if 0
-    u8 *GeneratedMap = MemoryArena_PushArrayAndZero(&GameState->WorldArena, World->Width * World->Height, u8);
-    vec2i Room0Center = GenerateRoomMap(&GameState->World, GeneratedMap, &GameState->WorldArena);
-#else
-    vec2i Room0Center = Vec2I(5, 5);
-#endif
+#if 1
+    
+    u8 *GeneratedEntityMap = MemoryArena_PushArrayAndZero(&GameState->TrArenaA, World->Width * World->Height, u8);
+    vec2i Room0Center = GenerateRoomMap(World, GeneratedEntityMap, &GameState->TrArenaA);
 
     // entity W = GetTestEntityBlueprint(ENTITY_STATIC, '#', VA_WHITE);
     // entity G = GetTestEntityBlueprint(ENTITY_STATIC, '@', VA_BLACK);
@@ -493,16 +551,18 @@ GenerateWorld(game_state *GameState)
     //         AddEntity(&GameState->World, IdxToXY(i, World->Width), &W, &GameState->WorldArena);
     //     }
     // }
-    
-    for (int i = 0; i < World->Width * World->Height; i++)
-    {
-        World->Tiles[i] = TILE_STONE;
-    }
+
+#else
+
+    vec2i Room0Center = Vec2I(5, 5);
 
     for (int i = 0; i < World->Width * World->Height; i++)
     {
-        World->DarknessLevels[i] = DARKNESS_UNSEEN;
+        World->TilesInitialized[i] = true;
+        World->Tiles[i] = TILE_STONE;
     }
+    
+#endif
 
     entity WallBlueprint = {};
     WallBlueprint.Type = ENTITY_STATIC;
@@ -511,7 +571,18 @@ GenerateWorld(game_state *GameState)
     WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
     SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
 
-    #if 1
+#if 1
+    
+    for (int i = 0; i < World->Width * World->Height; i++)
+    {
+        if (GeneratedEntityMap[i] == 2)
+        {
+            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
+        }
+    }
+    
+#else
+
     for (int X = 0; X < World->Width; X++)
     {
         AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
@@ -523,15 +594,8 @@ GenerateWorld(game_state *GameState)
         AddEntity(World, Vec2I(0, Y), &WallBlueprint, &GameState->WorldArena);
         AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint, &GameState->WorldArena);
     }
-    #else
-    for (int i = 0; i < World->Width * World->Height; i++)
-    {
-        if (GeneratedMap[i] == 2)
-        {
-            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
-        }
-    }
-    #endif
+    
+#endif
 
     entity PlayerBlueprint = {};
     PlayerBlueprint.Type = ENTITY_PLAYER;
@@ -551,9 +615,12 @@ GenerateWorld(game_state *GameState)
     EnemyBlueprint.ActionCost = 150;
     EnemyBlueprint.ViewRange = 20;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
-    
-    int AttemptsToAdd = 50;
-    for (int i = 0; i < AttemptsToAdd; i++)
+
+    int EnemyCount = 0;
+    int AttemptCount = 0;
+    int EnemiesToAdd = 0;
+    int MaxAttempts = 500;
+    while (EnemyCount < EnemiesToAdd && AttemptCount < MaxAttempts)
     {
         int X = GetRandomValue(0, World->Width);
         int Y = GetRandomValue(0, World->Height);
@@ -562,8 +629,12 @@ GenerateWorld(game_state *GameState)
         if (!CheckCollisions(World, P).Collided)
         {
             AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
+            EnemyCount++;
         }
+        AttemptCount++;
     }
+
+    TraceLog("Generated world. Added %d enemies in %d attempts.", EnemyCount, AttemptCount);
 }
 
 // SECTION: Pathing
@@ -983,6 +1054,8 @@ EntityTurnQueueInsert(world *World, entity *Entity, int NewCostOwed)
     }
     World->TurnQueueCount++;
 
+    Assert(InsertI >= 0 && InsertI < World->TurnQueueMax);
+
     World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
 }
 
@@ -1009,6 +1082,8 @@ EntityTurnQueuePopAndReinsert(world *World, int NewCostOwed)
         World->EntityTurnQueue[I] = World->EntityTurnQueue[I + 1];
         World->EntityTurnQueue[I].LeftoverCost -= CostToConsume;
     }
+
+    Assert(InsertI >= 0 && InsertI < World->TurnQueueMax);
 
     World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
 }

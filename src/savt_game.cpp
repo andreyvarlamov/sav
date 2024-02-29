@@ -24,12 +24,6 @@ UpdateCameraToWorldTarget(camera_2d *Camera, world *World, vec2i WorldP)
     Camera->Target = Vec2(TargetPxX, TargetPxY);
 }
 
-inline b32
-IsPInBounds(world *World, vec2i P)
-{
-    return (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height);
-}
-
 #include "savt_world.cpp"
 
 sav_texture
@@ -108,11 +102,22 @@ DrawGround(game_state *GameState)
 
                 for (int WorldI = 0; WorldI < GameState->World.Width * GameState->World.Height; WorldI++)
                 {
+                    b32 TileInitialized = GameState->World.TilesInitialized[WorldI];
                     u8 DarknessLevel = GameState->World.DarknessLevels[WorldI];
-                    if (DarknessLevel == DARKNESS_UNSEEN) continue;
+                    if (!TileInitialized || DarknessLevel == DARKNESS_UNSEEN) continue;
                     
                     switch (GameState->World.Tiles[WorldI])
                     {
+                        case TILE_GRASS:
+                        {
+                            if (GroundVariant != 1) continue;
+                        } break;
+
+                        case TILE_WATER:
+                        {
+                            if (GroundVariant != 3) continue;
+                        } break;
+                        
                         case TILE_STONE:
                         default:
                         {
@@ -550,22 +555,29 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     {
         if (PlayerRequestedDP.X != 0 || PlayerRequestedDP.Y != 0 || PlayerRequestedSkipTurn)
         {
-            TraceLog("");
-            TraceLog("-------------Player makes a move--------------");
-
+            b32 TurnUsed = true;
             if (PlayerRequestedDP.X != 0 || PlayerRequestedDP.Y != 0)
             {
                 vec2i NewP = World->PlayerEntity->Pos + PlayerRequestedDP;
-                if (MoveEntity(World, World->PlayerEntity, NewP))
+                // NOTE: Move entity can set TurnUsed to false, if that was a non-attack collision
+                if (MoveEntity(World, World->PlayerEntity, NewP, &TurnUsed))
                 {
                     UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
                 }
             }
 
-            EntityPositionsChanged = true;
+            if (TurnUsed)
+            {
+                TraceLog("");
+                TraceLog("-------------Player makes a move--------------");
 
-            EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
-            ActiveEntity = EntityTurnQueuePeek(World);
+                // NOTE: Set this regardless of whether player moved, because that will trigger entities to move,
+                // which for now means that player's FOV and the lighting has to be recalculated
+                EntityPositionsChanged = true;
+
+                EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
+                ActiveEntity = EntityTurnQueuePeek(World);
+            }
         }
     }
 
@@ -592,7 +604,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 if (Path.FoundPath && Path.Path)
                 {
                     vec2i NewEntityP = Path.Path[0];
-                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP);
+                    b32 TurnUsed;
+                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP, &TurnUsed);
                 }
             }
             else
@@ -621,7 +634,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                         default: break;
                     }
 
-                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP);
+                    b32 TurnUsed;
+                    MoveEntity(&GameState->World, ActiveEntity, NewEntityP, &TurnUsed);
                 }
             }
         }
@@ -675,7 +689,10 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         if (EntityExists(Entity) && Entity->Health <= 0.0f)
         {
-            EntityTurnQueueDelete(World, Entity);
+            if (Entity->ActionCost > 0)
+            {
+                EntityTurnQueueDelete(World, Entity);
+            }
             DeleteEntity(World, Entity);
         }
     }

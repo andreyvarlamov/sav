@@ -65,6 +65,7 @@ struct world
     int TilePxH;
 
     u8 *Tiles;
+    u8 *TilesInitialized;
     u8 *DarknessLevels;
 
     entity *Entities;
@@ -184,5 +185,11 @@ GetWorldCameraRect(camera_2d *Camera)
     return RectMinMax(WorldMin, WorldMax);
 }
     
+inline b32
+IsPValid(vec2i P, world *World)
+{
+    return (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height &&
+            World->TilesInitialized[XYToIdx(P, World->Width)]);
+}
 
 #endif
