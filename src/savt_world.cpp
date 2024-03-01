@@ -206,7 +206,7 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 
     *Entity = *CopyEntity;
     
-    b32 NeedFOV = (Entity->Type == ENTITY_NPC || Entity->Type == ENTITY_PLAYER);
+    b32 NeedFOV = Entity->Type == ENTITY_PLAYER;
     if (NeedFOV && Entity->FieldOfView == NULL)
     {
         // TODO: Allocate only for the entity max range rect
@@ -606,7 +606,7 @@ GenerateWorld(game_state *GameState)
     PlayerBlueprint.Glyph = '@';
     PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 100.0f;
     PlayerBlueprint.ActionCost = 100;
-    PlayerBlueprint.ViewRange = 15;
+    PlayerBlueprint.ViewRange = 100;
     SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
     World->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
     
@@ -620,10 +620,10 @@ GenerateWorld(game_state *GameState)
     EnemyBlueprint.NpcState = NPC_STATE_IDLE;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
 
-#if 0
+#if 1
     int EnemyCount = 0;
     int AttemptCount = 0;
-    int EnemiesToAdd = 50;
+    int EnemiesToAdd = 150;
     int MaxAttempts = 500;
     while (EnemyCount < EnemiesToAdd && AttemptCount < MaxAttempts)
     {
@@ -998,7 +998,7 @@ TraceLineBresenham(world *World, vec2i A, vec2i B, u8 *VisibilityMap, int MaxRan
 }
 
 void
-CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
+CalculateFOV(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
 {
     int MaxRangeSq = MaxRange*MaxRange;
     
@@ -1015,12 +1015,93 @@ CalculateLineOfSight(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
     }
 }
 
+void
+CalculateExhaustiveFOV(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
+{
+    int MaxRangeSq = MaxRange*MaxRange;
+
+    int StartX = Max(Pos.X - MaxRange, 0);
+    int EndX = Min(Pos.X + MaxRange, World->Width - 1);
+    int StartY = Max(Pos.Y - MaxRange, 0);
+    int EndY = Min(Pos.Y + MaxRange, World->Height - 1);
+    
+    for (int Y = StartY; Y <= EndY; Y++)
+    {
+        for (int X = StartX; X <= EndX; X++)
+        {
+            if (!VisibilityMap[XYToIdx(X, Y, World->Width)])
+            {
+                TraceLineBresenham(World, Pos, Vec2I(X, Y), VisibilityMap, MaxRangeSq);
+            }
+        }
+    }
+}
+
 b32
 IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
 {
-    int WorldI = XYToIdx(Pos, World->Width);
+    return FieldOfVision[XYToIdx(Pos, World->Width)];
+}
 
-    return FieldOfVision[WorldI];
+b32
+IsInLineOfSight(world *World, vec2i Start, vec2i End, int MaxRange)
+{
+    if (VecLengthSq(End - Start) <= MaxRange*MaxRange)
+    {
+        int CurrentX = Start.X;
+        int CurrentY = Start.Y;
+        int EndX = End.X;
+        int EndY = End.Y;
+    
+        int DeltaX = EndX - CurrentX;
+        int IX = ((DeltaX > 0) - (DeltaX < 0));
+        DeltaX = Abs(DeltaX) << 1;
+
+        int DeltaY = EndY - CurrentY;
+        int IY = ((DeltaY > 0) - (DeltaY < 0));
+        DeltaY = Abs(DeltaY) << 1;
+
+        if (DeltaX >= DeltaY)
+        {
+            int Error = (DeltaY - (DeltaY >> 1));
+            while (CurrentX != EndX)
+            {
+                if ((Error > 0) || (!Error && (IX > 0)))
+                {
+                    Error -= DeltaX;
+                    CurrentY += IY;
+                }
+
+                Error += DeltaY;
+                CurrentX += IX;
+
+                vec2i TestPos = Vec2I(CurrentX, CurrentY);
+                if (TestPos == End) return true;
+                if (IsTileOpaque(World, TestPos)) break;
+            }
+        }
+        else
+        {
+            int Error = (DeltaX - (DeltaY >> 1));
+            while (CurrentY != EndY)
+            {
+                if ((Error > 0) || (!Error && (IY > 0)))
+                {
+                    Error -= DeltaY;
+                    CurrentX += IX;
+                }
+
+                Error += DeltaX;
+                CurrentY += IY;
+
+                vec2i TestPos = Vec2I(CurrentX, CurrentY);
+                if (TestPos == End) return true;
+                if (IsTileOpaque(World, TestPos)) break;
+            }
+        }
+    }
+
+    return false;
 }
 
 // SECTION: Entity Turn Queue

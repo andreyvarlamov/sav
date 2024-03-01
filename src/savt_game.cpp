@@ -401,9 +401,7 @@ DrawEntities(game_state *GameState)
 b32
 LookAround(entity *Entity, world *World)
 {
-    b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
-                       EntityExists(World->PlayerEntity));
-    return PlayerInFOV;
+    return EntityExists(World->PlayerEntity) && IsInLineOfSight(World, Entity->Pos, World->PlayerEntity->Pos, Entity->ViewRange);
 }
 
 void
@@ -423,10 +421,7 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
 
         case NPC_STATE_HUNTING:
         {
-            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
-                               EntityExists(World->PlayerEntity));
-
-            if (!PlayerInFOV)
+            if (!LookAround(Entity, World))
             {
                 // NOTE: The player position here is already the position that the entity hasn't seen,
                 //       but to help with bad fov around corners, give entity one turn of "clairvoyance".
@@ -446,10 +441,7 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
 
         case NPC_STATE_SEARCHING:
         {
-            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
-                               EntityExists(World->PlayerEntity));
-
-            if (PlayerInFOV)
+            if (LookAround(Entity, World))
             {
                 Entity->NpcState = NPC_STATE_HUNTING;
                 TraceLog("Entity %p: found player. Now hunting player", Entity);
@@ -629,6 +621,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
         FirstFrame = true;
 
+        GameState->IgnoreFieldOfView = false;
+
         GameState->IsInitialized = true;
     }
 
@@ -680,12 +674,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     if (KeyPressedOrRepeat(SDL_SCANCODE_C)) PlayerRequestedDP = Vec2I( 1,  1);
     if (KeyPressedOrRepeat(SDL_SCANCODE_S)) PlayerRequestedSkipTurn = true;
 
-    b32 EntityPositionsChanged = false;
+    b32 PlayerFovDirty = false;
 
     if (KeyPressed(SDL_SCANCODE_F))
     {
         GameState->IgnoreFieldOfView = !GameState->IgnoreFieldOfView;
-        EntityPositionsChanged = true;
+        PlayerFovDirty = true;
     }
 
     // SECTION: Game logic
@@ -709,7 +703,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 if (MoveEntity(World, World->PlayerEntity, NewP, &TurnUsed))
                 {
                     UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
-                    EntityPositionsChanged = true;
+                    PlayerFovDirty = true;
                 }
             }
             else
@@ -732,13 +726,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         if (ActiveEntity->Type == ENTITY_NPC)
         {
             UpdateNpcState(GameState, World, ActiveEntity);
-
-            // TODO: Optimize by only calculating entity fov if player is in (some) range
-            if (ActiveEntity->FieldOfView != NULL && ActiveEntity->ViewRange > 1)
-            {
-                memset(ActiveEntity->FieldOfView, 0, World->Width * World->Height * sizeof(ActiveEntity->FieldOfView[0]));
-                CalculateLineOfSight(World, ActiveEntity->Pos, ActiveEntity->FieldOfView, ActiveEntity->ViewRange);
-            }
         }
         
         EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
@@ -750,12 +737,12 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
     }
 
-    if (EntityPositionsChanged || FirstFrame)
+    if (PlayerFovDirty || FirstFrame)
     {
         if (!GameState->IgnoreFieldOfView)
         {
             memset(World->PlayerEntity->FieldOfView, 0, World->Width * World->Height * sizeof(World->PlayerEntity->FieldOfView[0]));
-            CalculateLineOfSight(World, World->PlayerEntity->Pos, World->PlayerEntity->FieldOfView, World->PlayerEntity->ViewRange);
+            CalculateExhaustiveFOV(World, World->PlayerEntity->Pos, World->PlayerEntity->FieldOfView, World->PlayerEntity->ViewRange);
         }
     
         for (int i = 0; i < World->Width * World->Height; i++)
