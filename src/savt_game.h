@@ -59,6 +59,11 @@ struct entity
 
     vec2i Target;
 
+    const char *Name;
+    const char *Description;
+
+    int DebugID;
+
     entity *Next;
 };
 
@@ -85,6 +90,7 @@ struct world
     int EntityTightCount;
     int EntityUsedCount;
     int EntityMaxCount;
+    int EntityCurrentDebugID;
 
     entity **SpatialEntities;
 
@@ -111,7 +117,8 @@ struct game_state
     memory_arena TrArenaA;
     memory_arena TrArenaB;
 
-    sav_font *Font;
+    sav_font *TitleFont;
+    sav_font *BodyFont;
     glyph_atlas GlyphAtlas;
     sav_texture VigTex;
     sav_texture GroundBrushTex;

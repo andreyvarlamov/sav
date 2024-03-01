@@ -1612,7 +1612,7 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
     u32 AtlasPxWidth = AtlasColumns * MaxGlyphWidth;
     u32 AtlasPxHeight = AtlasRows * MaxGlyphHeight;
     u32 AtlasPitch = BytesPerPixel * AtlasPxWidth;
-    u8 *AtlasBytes = MemoryArena_PushArray(Arena, AtlasPitch * AtlasPxHeight, u8);
+    u8 *AtlasBytes = MemoryArena_PushArrayAndZero(Arena, AtlasPitch * AtlasPxHeight, u8);
     
     // NOTE: Blit each glyph surface to the atlas surface
     u32 CurrentGlyphIndex = 0;
@@ -1636,29 +1636,34 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
         u32 AtlasPxY = CurrentAtlasRow * Font->Height;
         size_t AtlasByteOffset = (AtlasPxY * AtlasPxWidth + AtlasPxX) * BytesPerPixel;
 
-        u8 *Dest = AtlasBytes + AtlasByteOffset;
-        u8 *Source = (u8 *) GlyphImage->pixels;
-        for (int GlyphPxY = 0;
-             GlyphPxY < GlyphImage->h;
-             ++GlyphPxY)
+        // NOTE: Hack solution to texture bleed in some fonts. 127 is DEL char, some fonts put a big rectangle for that, that fills
+        //       the whole glyph height, and can bleed into surrounding glyphs.
+        if (GlyphChar != 127)
         {
-            u8 *DestByte = (u8 *) Dest;
-            u8 *SourceByte = (u8 *) Source;
-            
-            for (int GlyphPxX = 0;
-                 GlyphPxX < GlyphImage->w;
-                 ++GlyphPxX)
+            u8 *Dest = AtlasBytes + AtlasByteOffset;
+            u8 *Source = (u8 *) GlyphImage->pixels;
+            for (int GlyphPxY = 0;
+                 GlyphPxY < GlyphImage->h;
+                 ++GlyphPxY)
             {
-                for (int PixelByte = 0;
-                     PixelByte < BytesPerPixel;
-                     ++PixelByte)
+                u8 *DestByte = (u8 *) Dest;
+                u8 *SourceByte = (u8 *) Source;
+            
+                for (int GlyphPxX = 0;
+                     GlyphPxX < GlyphImage->w;
+                     ++GlyphPxX)
                 {
-                    *DestByte++ = *SourceByte++;
+                    for (int PixelByte = 0;
+                         PixelByte < BytesPerPixel;
+                         ++PixelByte)
+                    {
+                        *DestByte++ = *SourceByte++;
+                    }
                 }
-            }
 
-            Dest += AtlasPitch;
-            Source += GlyphImage->pitch;
+                Dest += AtlasPitch;
+                Source += GlyphImage->pitch;
+            }
         }
 
         // NOTE:Use the atlas position and width/height to calculate UVs for each glyph
@@ -1698,27 +1703,70 @@ SavLoadFont(memory_arena *Arena, const char *Path, u32 PointSize)
 }
 
 void
-DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, color Color, b32 DrawBg, color BgColor, memory_arena *TransientArena)
+DrawString(const char *String,
+           sav_font *Font, f32 PointSize, f32 X, f32 Y, f32 MaxWidth,
+           color Color, b32 DrawBg, color BgColor,
+           memory_arena *TransientArena)
 {
     f32 SizeRatio = PointSize / Font->PointSize;
+
+    int StringCount;
+    for (StringCount = 0;
+         String[StringCount] != '\0';
+         ++StringCount) {}
+    
+    MemoryArena_Freeze(TransientArena);
+
+    u8 *WrapPoints = MemoryArena_PushArrayAndZero(TransientArena, StringCount, u8);
+    
+    if (MaxWidth > 0.0f)
+    {
+        int PrevSpaceI = 0;
+        f32 WrapXAccum = 0.0f;
+        for (int StringI = 0; StringI < StringCount; StringI++)
+        {
+            char Glyph = String[StringI];
+
+            glyph_info *GlyphInfo = Font->GlyphInfos + Glyph;
+
+            WrapXAccum += SizeRatio * GlyphInfo->Advance;
+
+            if (Glyph == ' ')
+            {
+                PrevSpaceI = StringI;
+            }
+
+            if (WrapXAccum > MaxWidth)
+            {
+                if (PrevSpaceI != 0)
+                {
+                    WrapPoints[PrevSpaceI] = 1;
+                    StringI = PrevSpaceI;
+                    WrapXAccum = 0.0f;
+                    PrevSpaceI = 0;
+                }
+                else
+                {
+                    WrapPoints[StringI] = 2;
+                    WrapXAccum = 0.0f;
+                }
+            }
+        }
+    }
     
     f32 CurrentX = X;
     f32 MaxX = X;
     f32 CurrentY = Y;
 
     int StringVisibleCount = 0;
-    int StringCount;
-    for (StringCount = 0;
-         String[StringCount] != '\0';
-         ++StringCount)
+    for (int StringI = 0; StringI < StringCount; ++StringI)
     {
-        if (String[StringCount] != '\n')
+        if (String[StringI] != '\n' && WrapPoints[StringI] != 1)
         {
             StringVisibleCount++;
         }
     }
 
-    MemoryArena_Freeze(TransientArena);
     int VertexCount = StringVisibleCount * 4;
     int IndexCount = StringVisibleCount * 6;
     vec3 *Vertices = MemoryArena_PushArray(TransientArena, VertexCount, vec3);
@@ -1738,7 +1786,7 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
 
         f32 sHeight = SizeRatio * Font->Height;
         
-        if (Glyph == '\n')
+        if (Glyph == '\n' || WrapPoints[StringIndex] > 0)
         {
             if (CurrentX > MaxX)
             {
@@ -1746,7 +1794,10 @@ DrawString(const char *String, sav_font *Font, f32 PointSize, f32 X, f32 Y, colo
             }
             CurrentX = X;
             CurrentY += sHeight;
-            continue;
+            if (WrapPoints[StringIndex] != 2)
+            {
+                continue;
+            }
         }
 
         Assert(Glyph >= 32 && Glyph < Font->GlyphCount);

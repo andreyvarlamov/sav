@@ -24,6 +24,7 @@ UpdateCameraToWorldTarget(camera_2d *Camera, world *World, vec2i WorldP)
     Camera->Target = Vec2(TargetPxX, TargetPxY);
 }
 
+#include "savt_entity_templates.cpp"
 #include "savt_world.cpp"
 
 sav_texture
@@ -415,7 +416,7 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
             if (LookAround(Entity, World))
             {
                 Entity->NpcState = NPC_STATE_HUNTING;
-                TraceLog("Entity %p: player is in POV. Now hunting player", Entity);
+                TraceLog("%s (%d): player is in FOV. Now hunting player", Entity->Name, Entity->DebugID);
             }
         } break;
 
@@ -430,7 +431,7 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
                 Entity->Target = World->PlayerEntity->Pos;
 
                 Entity->NpcState = NPC_STATE_SEARCHING;
-                TraceLog("Entity %p: player is missing. Searching where last seen: (%d, %d)", Entity, Entity->Target.X, Entity->Target.Y);
+                TraceLog("%s (%d): player is missing. Searching where last seen: (%d, %d)", Entity->Name, Entity->DebugID, Entity->Target.X, Entity->Target.Y);
             }
             else
             {
@@ -444,12 +445,12 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
             if (LookAround(Entity, World))
             {
                 Entity->NpcState = NPC_STATE_HUNTING;
-                TraceLog("Entity %p: found player. Now hunting player", Entity);
+                TraceLog("%s (%d): found player. Now hunting player", Entity->Name, Entity->DebugID);
             }
             else if (Entity->Pos == Entity->Target)
             {
                 Entity->NpcState = NPC_STATE_IDLE;
-                TraceLog("Entity %p: no player in last known location. Now idle", Entity);
+                TraceLog("%s (%d): no player in last known location. Now idle", Entity->Name, Entity->DebugID);
             }
         } break;
 
@@ -567,11 +568,13 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->Camera.Offset = GetWindowSize() / 2.0f;
 
         GameState->UiRect = Rect(GetWindowSize());
-        GameState->UiRenderTex = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, true);
+        GameState->UiRenderTex = SavLoadRenderTexture((int) GetWindowOrigSize().X, (int) GetWindowOrigSize().Y, false);
         GameState->LightingRenderTex = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         GameState->DebugOverlay = SavLoadRenderTexture((int) GetWindowSize().X, (int) GetWindowSize().Y, false);
         
-        GameState->Font = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
+        GameState->TitleFont = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 32);
+        GameState->BodyFont = SavLoadFont(&GameState->ResourceArena, "res/GildaDisplay-Regular.ttf", 28);
+        // GameState->BodyFont = SavLoadFont(&GameState->ResourceArena, "res/ProtestStrike-Regular.ttf", 28);
         GameState->GlyphAtlas.T = SavLoadTexture("res/NewFontCompromise.png");
         GameState->GlyphAtlas.GlyphsPerRow = 16;
         GameState->GlyphAtlas.GlyphPadX = 1;
@@ -698,6 +701,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             b32 TurnUsed = true;
             if (PlayerRequestedDP.X != 0 || PlayerRequestedDP.Y != 0)
             {
+                TraceLog("");
+                TraceLog("-------------Player makes a move--------------");
+                
                 vec2i NewP = World->PlayerEntity->Pos + PlayerRequestedDP;
                 // NOTE: Move entity can set TurnUsed to false, if that was a non-attack collision
                 if (MoveEntity(World, World->PlayerEntity, NewP, &TurnUsed))
@@ -705,11 +711,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                     UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
                     PlayerFovDirty = true;
                 }
-            }
-            else
-            {
-                TraceLog("");
-                TraceLog("-------------Player makes a move--------------");
             }
 
             if (TurnUsed)
@@ -788,6 +789,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     vec2 MouseP = GetMousePos();
     vec2 MouseWorldPxP = CameraScreenToWorld(&GameState->Camera, MouseP);
     vec2i MouseTileP = GetTilePFromPxP(&GameState->World, MouseWorldPxP);
+    entity *HighlightedEntity = GetEntitiesAt(&GameState->World, MouseTileP);
+    // while (HighlightedChar != NULL && HighlightedChar->Type != ENTITY_NPC && HighlightedChar->Type != ENTITY_PLAYER) HighlightedChar = HighlightedChar->Next;
     
     // SECTION: Render
     
@@ -796,35 +799,15 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     {
         ClearBackground(ColorAlpha(VA_WHITE, 0));
 
-        entity *Entity = GetEntitiesAt(&GameState->World, MouseTileP);
-        while (Entity)
+        if (HighlightedEntity != NULL && HighlightedEntity->FieldOfView)
         {
-            if (Entity->FieldOfView)
+            for (int i = 0; i < GameState->World.Width * GameState->World.Width; i++)
             {
-                for (int i = 0; i < GameState->World.Width * GameState->World.Width; i++)
+                if (HighlightedEntity->FieldOfView[i] == 1)
                 {
-                    if (Entity->FieldOfView[i] == 1)
-                    {
-                        DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLUE, 150));
-                    }
+                    DrawRect(&GameState->World, IdxToXY(i, GameState->World.Width), ColorAlpha(VA_BLUE, 150));
                 }
             }
-            
-            // if (Entity->Type == ENTITY_NPC)
-            // {
-            //     path_result Path = CalculatePath(&GameState->World,
-            //                                      Entity->Pos, World->PlayerEntity->Pos,
-            //                                      &GameState->TrArenaA, &GameState->TrArenaB,
-            //                                      0);
-
-                    
-            //     for (int Step = 0; Step < Path.PathSteps; Step++)
-            //     {
-            //         DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
-            //     }
-            // }
-
-            Entity = Entity->Next;
         }
     }
     EndCameraMode(); EndTextureMode();
@@ -835,33 +818,67 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         ClearBackground(ColorAlpha(VA_WHITE, 0));
 
         DrawString(TextFormat("%0.3f FPS", GetFPSAvg(), GetDeltaAvg()),
-                   GameState->Font,
-                   GameState->Font->PointSize,
-                   10,
-                   10,
+                   GameState->TitleFont,
+                   GameState->TitleFont->PointSize,
+                   10, 10, 0,
                    VA_MAROON,
                    true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TrArenaA);
 
         DrawString(TextFormat("%d, %d", MouseTileP.X, MouseTileP.Y, GameState->World.DarknessLevels[XYToIdx(MouseTileP.X, MouseTileP.Y, GameState->World.Width)]),
-                   GameState->Font,
-                   GameState->Font->PointSize,
-                   10,
-                   60,
+                   GameState->TitleFont,
+                   GameState->TitleFont->PointSize,
+                   10, 60, 0,
                    VA_MAROON,
                    true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TrArenaA);
 
         DrawString(TextFormat("Darkness Level: %d", GameState->World.DarknessLevels[XYToIdx(MouseTileP.X, MouseTileP.Y, GameState->World.Width)]),
-                   GameState->Font,
-                   GameState->Font->PointSize,
-                   10,
-                   110,
+                   GameState->TitleFont,
+                   GameState->TitleFont->PointSize,
+                   10, 110, 0,
                    VA_MAROON,
                    true, ColorAlpha(VA_BLACK, 128),
                    &GameState->TrArenaA);
 
-        DrawRect(Rect(1820, 980, 100, 100), VA_AQUAMARINE);
+
+        if (HighlightedEntity != NULL)
+        {
+            DrawRect(Rect(1500, 0, 420, 1080), ColorAlpha(VA_SLATEGRAY, 150));
+
+            if (HighlightedEntity->MaxHealth > 0.0f)
+            {
+                DrawString(TextFormat("HP: %.0f/%.0f", HighlightedEntity->Health, HighlightedEntity->MaxHealth),
+                           GameState->TitleFont,
+                           GameState->TitleFont->PointSize,
+                           1510, 10, 0,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+            }
+            
+            if (HighlightedEntity->Name)
+            {
+                DrawString(TextFormat("%s (%d)", HighlightedEntity->Name, HighlightedEntity->DebugID),
+                           GameState->TitleFont,
+                           GameState->TitleFont->PointSize,
+                           1510, 60, 0,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+            }
+
+            if (HighlightedEntity->Description)
+            {
+                DrawString(HighlightedEntity->Description,
+                           GameState->BodyFont,
+                           GameState->BodyFont->PointSize,
+                           1510, 110, 400,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+            }
+        }
     }
     EndTextureMode();
 

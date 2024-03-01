@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\savt_entity_templates.cpp" />
     <ClCompile Include="..\..\..\src\savt_game.cpp" />
     <ClCompile Include="..\..\..\src\savt_ground.cpp" />
     <ClCompile Include="..\..\..\src\savt_platform.cpp" />
@@ -141,7 +142,6 @@
     <ClInclude Include="..\..\..\src\va_linmath.h" />
     <ClInclude Include="..\..\..\src\va_math.h" />
     <ClInclude Include="..\..\..\src\va_memarena.h" />
-    <ClInclude Include="..\..\..\src\va_rect.h" />
     <ClInclude Include="..\..\..\src\va_sstring.h" />
     <ClInclude Include="..\..\..\src\va_types.h" />
     <ClInclude Include="..\..\..\src\va_util.h" />

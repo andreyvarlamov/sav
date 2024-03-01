@@ -214,6 +214,7 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
     }
     
     Entity->Pos = Pos;
+    Entity->DebugID = World->EntityCurrentDebugID++;
 
     AddEntityToSpatial(World, Pos, Entity);
 
@@ -228,37 +229,17 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 b32
 ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity, world *World)
 {
-    // TODO: Switch block based on 2 entity types
+    // TODO: Switch block based on the types of the 2 entities
     PassiveEntity->Health -= 3;
                 
-    if (ActiveEntity == World->PlayerEntity)
-    {
-        TraceLog("");
-        TraceLog("-------------Player makes a move--------------");
-        TraceLog("Player hits entity %p. Remaining health: %f", PassiveEntity, PassiveEntity->Health);
-    }
-    else
-    {
-        if (PassiveEntity == World->PlayerEntity)
-        {
-            TraceLog("Entity %p hits player. Remaining health: %f", ActiveEntity, PassiveEntity->Health);
-        }
-        else
-        {
-            TraceLog("Entity %p hits entity %p. Remaining health: %f", ActiveEntity, PassiveEntity, PassiveEntity->Health);
-        }
-    }
+    TraceLog("%s (%d) hits %s (%d). Remaining health: %f",
+             ActiveEntity->Name, ActiveEntity->DebugID,
+             PassiveEntity->Name, PassiveEntity->DebugID,
+             PassiveEntity->Health);
 
     if (PassiveEntity->Health <= 0.0f)
     {
-        if (PassiveEntity == World->PlayerEntity)
-        {
-            TraceLog("Player is dead.");
-        }
-        else
-        {
-            TraceLog("Entity %p is dead.", PassiveEntity);
-        }
+        TraceLog("%s (%d) is dead", PassiveEntity->Name, PassiveEntity->DebugID);
     }
 
     // NOTE: This will return false if there's a non-attack collision between 2 entities
@@ -289,17 +270,9 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
         AddEntityToSpatial(World, NewP, Entity);
 
         Entity->Pos = NewP;
+        
 #if 1
-        if (Entity == World->PlayerEntity)
-        {
-            TraceLog("");
-            TraceLog("-------------Player makes a move--------------");
-            TraceLog("Player moves without hitting anyone");
-        }
-        else
-        {
-            TraceLog("Entity %p moves without hitting anyone", Entity);
-        }
+        TraceLog("%s (%d) moves without hitting anyone", Entity->Name, Entity->DebugID);
 #endif
         
         *Out_TurnUsed = true;
@@ -541,12 +514,7 @@ GenerateWorld(game_state *GameState)
     World->TurnQueueMax = World->EntityMaxCount;
     World->EntityTurnQueue = MemoryArena_PushArray(&GameState->WorldArena, World->TurnQueueMax, entity_queue_node);
 
-    entity WallBlueprint = {};
-    WallBlueprint.Type = ENTITY_STATIC;
-    WallBlueprint.Color = VA_SLATEGRAY;
-    WallBlueprint.Glyph = 11 + 16*13;
-    WallBlueprint.Health = WallBlueprint.MaxHealth = 100.0f;
-    SetFlags(&WallBlueprint.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
+    entity PumiceWall = Template_PumiceWall();
 
 #if (GENERATED_MAP == 1)
     
@@ -572,7 +540,7 @@ GenerateWorld(game_state *GameState)
     {
         if (GeneratedEntityMap[i] == 2)
         {
-            AddEntity(&GameState->World, IdxToXY(i, World->Width), &WallBlueprint, &GameState->WorldArena);
+            AddEntity(&GameState->World, IdxToXY(i, World->Width), &PumiceWall, &GameState->WorldArena);
         }
     }
 
@@ -588,39 +556,23 @@ GenerateWorld(game_state *GameState)
 
     for (int X = 0; X < World->Width; X++)
     {
-        AddEntity(World, Vec2I(X, 0), &WallBlueprint, &GameState->WorldArena);
-        AddEntity(World, Vec2I(X, World->Height - 1), &WallBlueprint, &GameState->WorldArena);
+        AddEntity(World, Vec2I(X, 0), &PumiceWall, &GameState->WorldArena);
+        AddEntity(World, Vec2I(X, World->Height - 1), &PumiceWall, &GameState->WorldArena);
     }
 
     for (int Y = 1; Y < World->Height - 1; Y++)
     {
-        AddEntity(World, Vec2I(0, Y), &WallBlueprint, &GameState->WorldArena);
-        AddEntity(World, Vec2I(World->Width - 1, Y), &WallBlueprint, &GameState->WorldArena);
+        AddEntity(World, Vec2I(0, Y), &PumiceWall, &GameState->WorldArena);
+        AddEntity(World, Vec2I(World->Width - 1, Y), &PumiceWall, &GameState->WorldArena);
     }
     
 #endif
 
-    entity PlayerBlueprint = {};
-    PlayerBlueprint.Type = ENTITY_PLAYER;
-    PlayerBlueprint.Color = VA_MAROON;
-    PlayerBlueprint.Glyph = '@';
-    PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 100.0f;
-    PlayerBlueprint.ActionCost = 100;
-    PlayerBlueprint.ViewRange = 100;
-    SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
-    World->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
-    
-    entity EnemyBlueprint = {};
-    EnemyBlueprint.Type = ENTITY_NPC;
-    EnemyBlueprint.Color = VA_CORAL;
-    EnemyBlueprint.Glyph = 1 + 9*16;
-    EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
-    EnemyBlueprint.ActionCost = 150;
-    EnemyBlueprint.ViewRange = 10;
-    EnemyBlueprint.NpcState = NPC_STATE_IDLE;
-    SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
+    entity Player = Template_Player();
+    World->PlayerEntity = AddEntity(World, Room0Center, &Player, &GameState->WorldArena);
 
-#if 1
+    entity AetherFly = Template_AetherFly();
+#if 0
     int EnemyCount = 0;
     int AttemptCount = 0;
     int EnemiesToAdd = 150;
@@ -633,7 +585,7 @@ GenerateWorld(game_state *GameState)
         vec2i P = Vec2I(X, Y);
         if (!CheckCollisions(World, P).Collided)
         {
-            AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
+            AddEntity(World, P, &AetherFly, &GameState->WorldArena);
             EnemyCount++;
         }
         AttemptCount++;
@@ -641,7 +593,7 @@ GenerateWorld(game_state *GameState)
 #else
     int EnemyCount = 0;
     int AttemptCount = 0;
-    int EnemiesToAdd = 1;
+    int EnemiesToAdd = 5;
     int MaxAttempts = 500;
     while (EnemyCount < EnemiesToAdd && AttemptCount < MaxAttempts)
     {
@@ -651,7 +603,7 @@ GenerateWorld(game_state *GameState)
         vec2i P = Vec2I(X, Y);
         if (!CheckCollisions(World, P).Collided)
         {
-            AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
+            AddEntity(World, P, &AetherFly, &GameState->WorldArena);
             EnemyCount++;
         }
         AttemptCount++;
