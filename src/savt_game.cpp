@@ -398,6 +398,14 @@ DrawEntities(game_state *GameState)
     EndDraw();
 }
 
+b32
+LookAround(entity *Entity, world *World)
+{
+    b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
+                       EntityExists(World->PlayerEntity));
+    return PlayerInFOV;
+}
+
 void
 UpdateNpcState(game_state *GameState, world *World, entity *Entity)
 {
@@ -406,13 +414,10 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
     {
         case NPC_STATE_IDLE:
         {
-            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
-                               EntityExists(World->PlayerEntity));
-
-            if (PlayerInFOV)
+            if (LookAround(Entity, World))
             {
                 Entity->NpcState = NPC_STATE_HUNTING;
-                TraceLog("Entity %p is now hunting player.", Entity);
+                TraceLog("Entity %p: player is in POV. Now hunting player", Entity);
             }
         } break;
 
@@ -423,8 +428,36 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
 
             if (!PlayerInFOV)
             {
+                // NOTE: The player position here is already the position that the entity hasn't seen,
+                //       but to help with bad fov around corners, give entity one turn of "clairvoyance".
+                // TODO: Only update target here if the new player pos is within a certain radius, or in los of the old target
+                //       to prevent following the player if he teleported
+                Entity->Target = World->PlayerEntity->Pos;
+
+                Entity->NpcState = NPC_STATE_SEARCHING;
+                TraceLog("Entity %p: player is missing. Searching where last seen: (%d, %d)", Entity, Entity->Target.X, Entity->Target.Y);
+            }
+            else
+            {
+                Entity->Target = World->PlayerEntity->Pos;
+            }
+            
+        } break;
+
+        case NPC_STATE_SEARCHING:
+        {
+            b32 PlayerInFOV = (Entity->FieldOfView != NULL && IsInFOV(World, Entity->FieldOfView, World->PlayerEntity->Pos) &&
+                               EntityExists(World->PlayerEntity));
+
+            if (PlayerInFOV)
+            {
+                Entity->NpcState = NPC_STATE_HUNTING;
+                TraceLog("Entity %p: found player. Now hunting player", Entity);
+            }
+            else if (Entity->Pos == Entity->Target)
+            {
                 Entity->NpcState = NPC_STATE_IDLE;
-                TraceLog("Entity %p is now idle.", Entity);
+                TraceLog("Entity %p: no player in last known location. Now idle", Entity);
             }
         } break;
 
@@ -470,10 +503,27 @@ UpdateNpcState(game_state *GameState, world *World, entity *Entity)
 
         case NPC_STATE_HUNTING:
         {
+            Entity->Target = World->PlayerEntity->Pos;
             path_result Path = CalculatePath(World,
                                              Entity->Pos, World->PlayerEntity->Pos,
                                              &GameState->TrArenaA, &GameState->TrArenaB,
                                              0);
+            
+            if (Path.FoundPath && Path.Path)
+            {
+                vec2i NewEntityP = Path.Path[0];
+                b32 TurnUsed;
+                MoveEntity(&GameState->World, Entity, NewEntityP, &TurnUsed);
+            }
+        } break;
+
+        case NPC_STATE_SEARCHING:
+        {
+            path_result Path = CalculatePath(World,
+                                             Entity->Pos, Entity->Target,
+                                             &GameState->TrArenaA, &GameState->TrArenaB,
+                                             0);
+            
             if (Path.FoundPath && Path.Path)
             {
                 vec2i NewEntityP = Path.Path[0];
@@ -659,6 +709,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 if (MoveEntity(World, World->PlayerEntity, NewP, &TurnUsed))
                 {
                     UpdateCameraToWorldTarget(&GameState->Camera, World, NewP);
+                    EntityPositionsChanged = true;
                 }
             }
             else
@@ -669,10 +720,6 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
             if (TurnUsed)
             {
-                // NOTE: Set this regardless of whether player moved, because that will trigger entities to move,
-                // which for now means that player's FOV and the lighting has to be recalculated
-                EntityPositionsChanged = true;
-
                 EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
                 ActiveEntity = EntityTurnQueuePeek(World);
             }
@@ -684,14 +731,14 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     {
         if (ActiveEntity->Type == ENTITY_NPC)
         {
+            UpdateNpcState(GameState, World, ActiveEntity);
+
             // TODO: Optimize by only calculating entity fov if player is in (some) range
             if (ActiveEntity->FieldOfView != NULL && ActiveEntity->ViewRange > 1)
             {
                 memset(ActiveEntity->FieldOfView, 0, World->Width * World->Height * sizeof(ActiveEntity->FieldOfView[0]));
                 CalculateLineOfSight(World, ActiveEntity->Pos, ActiveEntity->FieldOfView, ActiveEntity->ViewRange);
             }
-            
-            UpdateNpcState(GameState, World, ActiveEntity);
         }
         
         EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
@@ -776,19 +823,19 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                 }
             }
             
-            if (Entity->Type == ENTITY_NPC)
-            {
-                path_result Path = CalculatePath(&GameState->World,
-                                                 Entity->Pos, World->PlayerEntity->Pos,
-                                                 &GameState->TrArenaA, &GameState->TrArenaB,
-                                                 0);
+            // if (Entity->Type == ENTITY_NPC)
+            // {
+            //     path_result Path = CalculatePath(&GameState->World,
+            //                                      Entity->Pos, World->PlayerEntity->Pos,
+            //                                      &GameState->TrArenaA, &GameState->TrArenaB,
+            //                                      0);
 
                     
-                for (int Step = 0; Step < Path.PathSteps; Step++)
-                {
-                    DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
-                }
-            }
+            //     for (int Step = 0; Step < Path.PathSteps; Step++)
+            //     {
+            //         DrawRect(&GameState->World, Path.Path[Step], ((Step < Path.PathSteps - 1) ? ColorAlpha(VA_YELLOW, 150) : ColorAlpha(VA_RED, 150)));
+            //     }
+            // }
 
             Entity = Entity->Next;
         }

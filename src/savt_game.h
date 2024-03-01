@@ -34,6 +34,7 @@ enum npc_state
     NPC_STATE_NONE = 0,
     NPC_STATE_IDLE,
     NPC_STATE_HUNTING,
+    NPC_STATE_SEARCHING,
     NPC_STATE_COUNT
 };
 
@@ -55,6 +56,8 @@ struct entity
     u8 *FieldOfView;
 
     u8 NpcState;
+
+    vec2i Target;
 
     entity *Next;
 };

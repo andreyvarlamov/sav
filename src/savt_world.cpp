@@ -289,7 +289,7 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
         AddEntityToSpatial(World, NewP, Entity);
 
         Entity->Pos = NewP;
-#if 0
+#if 1
         if (Entity == World->PlayerEntity)
         {
             TraceLog("");
@@ -606,7 +606,7 @@ GenerateWorld(game_state *GameState)
     PlayerBlueprint.Glyph = '@';
     PlayerBlueprint.Health = PlayerBlueprint.MaxHealth = 100.0f;
     PlayerBlueprint.ActionCost = 100;
-    PlayerBlueprint.ViewRange = 7;
+    PlayerBlueprint.ViewRange = 15;
     SetFlags(&PlayerBlueprint.Flags, ENTITY_IS_BLOCKING);
     World->PlayerEntity = AddEntity(World, Room0Center, &PlayerBlueprint, &GameState->WorldArena);
     
@@ -616,10 +616,11 @@ GenerateWorld(game_state *GameState)
     EnemyBlueprint.Glyph = 1 + 9*16;
     EnemyBlueprint.Health = EnemyBlueprint.MaxHealth = 10.0f;
     EnemyBlueprint.ActionCost = 150;
-    EnemyBlueprint.ViewRange = 20;
+    EnemyBlueprint.ViewRange = 10;
     EnemyBlueprint.NpcState = NPC_STATE_IDLE;
     SetFlags(&EnemyBlueprint.Flags, ENTITY_IS_BLOCKING);
 
+#if 0
     int EnemyCount = 0;
     int AttemptCount = 0;
     int EnemiesToAdd = 50;
@@ -637,6 +638,25 @@ GenerateWorld(game_state *GameState)
         }
         AttemptCount++;
     }
+#else
+    int EnemyCount = 0;
+    int AttemptCount = 0;
+    int EnemiesToAdd = 1;
+    int MaxAttempts = 500;
+    while (EnemyCount < EnemiesToAdd && AttemptCount < MaxAttempts)
+    {
+        int X = GetRandomValue(World->PlayerEntity->Pos.X - 10, World->PlayerEntity->Pos.X + 10);
+        int Y = GetRandomValue(World->PlayerEntity->Pos.Y - 10, World->PlayerEntity->Pos.Y + 10);
+
+        vec2i P = Vec2I(X, Y);
+        if (!CheckCollisions(World, P).Collided)
+        {
+            AddEntity(World, P, &EnemyBlueprint, &GameState->WorldArena);
+            EnemyCount++;
+        }
+        AttemptCount++;
+    }
+#endif
 
     TraceLog("Generated world. Added %d enemies in %d attempts.", EnemyCount, AttemptCount);
 }
