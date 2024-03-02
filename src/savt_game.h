@@ -1,6 +1,8 @@
 #ifndef SAVT_GAME_H
 #define SAVT_GAME_H
 
+#include "sav_lib.h"
+
 struct glyph_atlas
 {
     sav_texture T;
@@ -38,6 +40,35 @@ enum npc_state
     NPC_STATE_COUNT
 };
 
+struct character_stats
+{
+    int Level;
+
+     // NOTE: Can choose to level these every level; retroactive (maybe?)
+    int HaimaBonus;
+    int KitrinaBonus;
+    int MelanaBonus;
+    int SeraBonus;
+
+    // NOTE: Based on class
+    int HaimaDice;
+    int KitrinaDice;
+    int MelanaDice;
+    int SeraDice;
+
+    // NOTE: Accum of die rolls every level
+    int HaimaPointsAccum;
+    int KitrinaPointsAccumt;
+    int MelanaPointsAccum;
+    int SeraPointsAccum;
+
+    // NOTE: Actual levels: Level * Bonus + Accum + Die roll
+    int Haima;
+    int Kitrina;
+    int Melana;
+    int Sera;
+};
+
 struct entity
 {
     u8 Type;
@@ -65,6 +96,8 @@ struct entity
     int DebugID;
 
     entity *Next;
+
+    character_stats Stats;
 };
 
 enum { ENTITY_MAX_COUNT = 16384 };
@@ -126,6 +159,7 @@ struct game_state
     sav_texture StoneWallTex;
     sav_shader GroundShader;
 
+    music_stream BackgroundMusic;
     camera_2d Camera;
 
     rect UiRect;

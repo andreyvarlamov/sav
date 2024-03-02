@@ -47,7 +47,7 @@ rem Link against libs:
     rem SDL simple -- SDL2main.lib SDL2.lib SDL2_image.lib SDL2_ttf.lib shell32.lib
     rem SDL opengl assimp -- SDL2main.lib SDL2.lib SDL2_image.lib SDL2_ttf.lib glad.lib opengl32.lib shell32.lib assimp-vc143-mtd.lib
     rem Raylib -- raylibdll.lib raylib.lib
-set llib=sav_lib.lib
+set llib=sav_lib.lib savt_entity_templates.lib
 
 pushd %bindir%
 

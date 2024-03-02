@@ -1,5 +1,14 @@
-entity
+#ifdef TEMPLATE_EXPORTS
+#define TEMPLATE_FUNC extern "C" __declspec(dllexport)
+#else
+#define TEMPLATE_FUNC extern "C" __declspec(dllimport)
+#endif
+
+#include "savt_game.h"
+
+TEMPLATE_FUNC entity
 Template_PumiceWall()
+#ifdef TEMPLATE_EXPORTS
 {
     entity Template = {};
     Template.Type = ENTITY_STATIC;
@@ -11,9 +20,13 @@ Template_PumiceWall()
     SetFlags(&Template.Flags, ENTITY_IS_BLOCKING | ENTITY_IS_OPAQUE);
     return Template;
 }
+#else
+;
+#endif
 
-entity
+TEMPLATE_FUNC entity
 Template_Player()
+#ifdef TEMPLATE_EXPORTS
 {
     entity Template = {};
     Template.Type = ENTITY_PLAYER;
@@ -27,9 +40,13 @@ Template_Player()
     SetFlags(&Template.Flags, ENTITY_IS_BLOCKING);
     return Template;
 }
+#else
+;
+#endif
 
-entity
+TEMPLATE_FUNC entity
 Template_AetherFly()
+#ifdef TEMPLATE_EXPORTS
 {
     entity Template = {};
     Template.Type = ENTITY_NPC;
@@ -44,6 +61,9 @@ Template_AetherFly()
     SetFlags(&Template.Flags, ENTITY_IS_BLOCKING);
     return Template;
 }
+#else
+;
+#endif
 
 // TODO: Aether ant
 // TODO: Martyr worshipped by aether creatures (boss)

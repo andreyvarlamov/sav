@@ -16,6 +16,8 @@ int main(int argc, char **argv)
 {
     InitWindow("SAV", 1920, 1080);
 
+    InitAudio();
+
     // RenderDecl *RenderPtr = &Render;
     InitGameCode("bin/savt_game.dll", "UpdateAndRender", (void **) &UpdateAndRender);
 

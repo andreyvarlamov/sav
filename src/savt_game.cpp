@@ -589,6 +589,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->StoneWallTex = SavLoadTexture("res/PurgStoneWall2.png");
         SavSetTextureWrapMode(GameState->StoneWallTex, SAV_CLAMP_TO_EDGE);
 
+        // GameState->BackgroundMusic = LoadMusicStream("res/20240204 Calling.mp3");
+
         GenerateWorld(GameState);
 
         TraceLog("Allocated %zu KB for %d entities. Each entity is %zu bytes.",
@@ -622,6 +624,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             GameState->GroundRots[i] = Vec2(SpriteRot, VigRot);
         }
 
+        // PlayMusicStream(GameState->BackgroundMusic);
+        
         FirstFrame = true;
 
         GameState->IgnoreFieldOfView = false;
@@ -842,9 +846,10 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                    &GameState->TrArenaA);
 
 
+        // NOTE: Inspect UI
         if (HighlightedEntity != NULL)
         {
-            DrawRect(Rect(1500, 0, 420, 1080), ColorAlpha(VA_SLATEGRAY, 150));
+            DrawRect(Rect(1500, 0, 420, 1080), ColorAlpha(VA_SLATEGRAY, 200));
 
             if (HighlightedEntity->MaxHealth > 0.0f)
             {
@@ -879,6 +884,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                            &GameState->TrArenaA);
             }
         }
+
+        // NOTE: Player stats UI
+        DrawRect(Rect(0, 780, 500, 1080), ColorAlpha(VA_SLATEGRAY, 200));
     }
     EndTextureMode();
 
