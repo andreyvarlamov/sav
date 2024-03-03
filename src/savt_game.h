@@ -40,35 +40,6 @@ enum npc_state
     NPC_STATE_COUNT
 };
 
-struct character_stats
-{
-    int Level;
-
-     // NOTE: Can choose to level these every level; retroactive (maybe?)
-    int HaimaBonus;
-    int KitrinaBonus;
-    int MelanaBonus;
-    int SeraBonus;
-
-    // NOTE: Based on class
-    int HaimaDice;
-    int KitrinaDice;
-    int MelanaDice;
-    int SeraDice;
-
-    // NOTE: Accum of die rolls every level
-    int HaimaPointsAccum;
-    int KitrinaPointsAccumt;
-    int MelanaPointsAccum;
-    int SeraPointsAccum;
-
-    // NOTE: Actual levels: Level * Bonus + Accum + Die roll
-    int Haima;
-    int Kitrina;
-    int Melana;
-    int Sera;
-};
-
 struct entity
 {
     u8 Type;
@@ -78,8 +49,7 @@ struct entity
     sav_texture Tex;
     
     vec2i Pos;
-    f32 Health;
-    f32 MaxHealth;
+    f32 Condition;
     int ActionCost;
     u32 Flags;
 
@@ -97,7 +67,15 @@ struct entity
 
     entity *Next;
 
-    character_stats Stats;
+    int Health;
+    int MaxHealth;
+    int ArmorClass;
+    int AttackModifier;
+    int Damage;
+
+    int LastHealTurn;
+    int RegenActionCost;
+    int RegenAmount;
 };
 
 enum { ENTITY_MAX_COUNT = 16384 };
@@ -131,6 +109,8 @@ struct world
     int TurnQueueCount;
     int TurnQueueMax;
 
+    int TurnsPassed;
+
     entity *PlayerEntity;
 };
 
@@ -158,6 +138,7 @@ struct game_state
     rect GroundBrushRect; // TODO: tex + rect, atlas idiom?
     sav_texture StoneWallTex;
     sav_shader GroundShader;
+    sav_texture PlayerPortraitTex;
 
     music_stream BackgroundMusic;
     camera_2d Camera;
@@ -208,7 +189,7 @@ GetTestEntityBlueprint(entity_type Type, u8 Glyph, color Color)
     Blueprint.IsTex = false;
     Blueprint.Color = Color;
     Blueprint.Glyph = Glyph;
-    Blueprint.Health = Blueprint.MaxHealth = 10.0f;
+    Blueprint.Condition = 100.0f;
     return Blueprint;
 }
 
@@ -244,6 +225,19 @@ IsPValid(vec2i P, world *World)
 {
     return (P.X >= 0 && P.X < World->Width && P.Y >= 0 && P.Y < World->Height &&
             World->TilesInitialized[XYToIdx(P, World->Width)]);
+}
+
+inline int
+RollDice(int DieCount, int DieValue)
+{
+    int DiceRoll = 0;
+    
+    for (int DieI = 0; DieI < DieCount; DieI++)
+    {
+        DiceRoll += GetRandomValue(1, DieValue + 1);
+    }
+
+    return DiceRoll;
 }
 
 #endif

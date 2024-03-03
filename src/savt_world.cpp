@@ -226,24 +226,71 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
     return Entity;
 }
 
-b32
-ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity, world *World)
+void
+EntityAttacksEntity(entity *Attacker, entity *Defender)
 {
-    // TODO: Switch block based on the types of the 2 entities
-    PassiveEntity->Health -= 3;
-                
-    TraceLog("%s (%d) hits %s (%d). Remaining health: %f",
-             ActiveEntity->Name, ActiveEntity->DebugID,
-             PassiveEntity->Name, PassiveEntity->DebugID,
-             PassiveEntity->Health);
+    int AttackRoll = RollDice(1, 20);
 
-    if (PassiveEntity->Health <= 0.0f)
+    b32 AttackConnects = (AttackRoll + Attacker->AttackModifier > Defender->ArmorClass);
+
+    if (AttackConnects)
     {
-        TraceLog("%s (%d) is dead", PassiveEntity->Name, PassiveEntity->DebugID);
-    }
+        int DamageValue = RollDice(1, Attacker->Damage);
+        Defender->Health -= DamageValue;
 
-    // NOTE: This will return false if there's a non-attack collision between 2 entities
-    return true;
+        if (Defender->Health > 0)
+        {
+            TraceLog("%s (%d) hits %s (%d) for %d damage (%d + %d > %d). Remaining Health: %d.",
+                     Attacker->Name, Attacker->DebugID,
+                     Defender->Name, Defender->DebugID,
+                     DamageValue, AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
+                     Defender->Health);
+        }
+        else
+        {
+            TraceLog("%s (%d) hits %s (%d) for %d damage (%d + %d > %d). Remaining Health: %d. %s (%d) is dead.",
+                     Attacker->Name, Attacker->DebugID,
+                     Defender->Name, Defender->DebugID,
+                     DamageValue, AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
+                     Defender->Health,
+                     Defender->Name, Defender->DebugID);
+        }
+    }
+    else
+    {
+        TraceLog("%s (%d) misses %s (%d) (%d + %d <= %d). Remaining Health: %d.",
+                 Attacker->Name, Attacker->DebugID,
+                 Defender->Name, Defender->DebugID,
+                 AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
+                 Defender->Health);
+    }
+}
+
+b32
+ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity)
+{
+    switch(ActiveEntity->Type)
+    {
+        case ENTITY_PLAYER:
+        case ENTITY_NPC:
+        {
+            switch (PassiveEntity->Type)
+            {
+                case ENTITY_PLAYER:
+                case ENTITY_NPC:
+                {
+                    EntityAttacksEntity(ActiveEntity, PassiveEntity);
+                    return true;
+                } break;
+
+                default: break;
+            }
+        };
+        
+        default: break;
+    }
+    
+    return false;
 }
 
 b32
@@ -259,7 +306,7 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
     {
         if (Col.Entity)
         {
-            *Out_TurnUsed = ResolveEntityCollision(Entity, Col.Entity, World);
+            *Out_TurnUsed = ResolveEntityCollision(Entity, Col.Entity);
         }
 
         return false;
@@ -271,7 +318,7 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
 
         Entity->Pos = NewP;
         
-#if 1
+#if 0
         TraceLog("%s (%d) moves without hitting anyone", Entity->Name, Entity->DebugID);
 #endif
         
@@ -572,7 +619,7 @@ GenerateWorld(game_state *GameState)
     World->PlayerEntity = AddEntity(World, Room0Center, &Player, &GameState->WorldArena);
 
     entity AetherFly = Template_AetherFly();
-#if 0
+#if 1
     int EnemyCount = 0;
     int AttemptCount = 0;
     int EnemiesToAdd = 150;
@@ -1116,7 +1163,7 @@ EntityTurnQueueInsert(world *World, entity *Entity, int NewCostOwed)
     World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
 }
 
-void
+int
 EntityTurnQueuePopAndReinsert(world *World, int NewCostOwed)
 {
     entity *Entity = World->EntityTurnQueue->Entity;
@@ -1143,6 +1190,8 @@ EntityTurnQueuePopAndReinsert(world *World, int NewCostOwed)
     Assert(InsertI >= 0 && InsertI < World->TurnQueueMax);
 
     World->EntityTurnQueue[InsertI] = MakeEntityQueueNode(Entity, NewCostOwed);
+
+    return CostToConsume;
 }
 
 void

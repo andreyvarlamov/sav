@@ -589,6 +589,8 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         GameState->StoneWallTex = SavLoadTexture("res/PurgStoneWall2.png");
         SavSetTextureWrapMode(GameState->StoneWallTex, SAV_CLAMP_TO_EDGE);
 
+        GameState->PlayerPortraitTex = SavLoadTexture("res/PlayerPortrait.png");
+        
         // GameState->BackgroundMusic = LoadMusicStream("res/20240204 Calling.mp3");
 
         GenerateWorld(GameState);
@@ -719,7 +721,17 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
 
             if (TurnUsed)
             {
-                EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
+                if (World->TurnsPassed - World->PlayerEntity->LastHealTurn > World->PlayerEntity->RegenActionCost &&
+                    World->PlayerEntity->Health < World->PlayerEntity->MaxHealth && GetRandomValue(0, 2) == 0)
+                {
+                    int RegenAmount = RollDice(1, World->PlayerEntity->RegenAmount);
+                    World->PlayerEntity->Health += RegenAmount;
+                    World->PlayerEntity->LastHealTurn = World->TurnsPassed;
+                    TraceLog("Player regens %d health.", RegenAmount);
+                }
+
+                
+                World->TurnsPassed += EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
                 ActiveEntity = EntityTurnQueuePeek(World);
             }
         }
@@ -733,7 +745,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
             UpdateNpcState(GameState, World, ActiveEntity);
         }
         
-        EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
+        World->TurnsPassed += EntityTurnQueuePopAndReinsert(World, ActiveEntity->ActionCost);
         ActiveEntity = EntityTurnQueuePeek(World);
 
         if (ActiveEntity == StartingEntity)
@@ -780,7 +792,7 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
     {
         entity *Entity = World->Entities + i;
 
-        if (EntityExists(Entity) && Entity->Health <= 0.0f)
+        if (EntityExists(Entity) && (Entity->Condition <= 0.0f || Entity->Health < 0))
         {
             if (Entity->ActionCost > 0)
             {
@@ -851,9 +863,9 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         {
             DrawRect(Rect(1500, 0, 420, 1080), ColorAlpha(VA_SLATEGRAY, 200));
 
-            if (HighlightedEntity->MaxHealth > 0.0f)
+            if (HighlightedEntity->Name)
             {
-                DrawString(TextFormat("HP: %.0f/%.0f", HighlightedEntity->Health, HighlightedEntity->MaxHealth),
+                DrawString(TextFormat("%s (%d)", HighlightedEntity->Name, HighlightedEntity->DebugID),
                            GameState->TitleFont,
                            GameState->TitleFont->PointSize,
                            1510, 10, 0,
@@ -861,24 +873,48 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
                            false, VA_BLACK,
                            &GameState->TrArenaA);
             }
-            
-            if (HighlightedEntity->Name)
+
+            if (HighlightedEntity->MaxHealth > 0)
             {
-                DrawString(TextFormat("%s (%d)", HighlightedEntity->Name, HighlightedEntity->DebugID),
+                DrawString(TextFormat("HP: %d/%d", HighlightedEntity->Health, HighlightedEntity->MaxHealth),
                            GameState->TitleFont,
                            GameState->TitleFont->PointSize,
                            1510, 60, 0,
                            VA_BLACK,
                            false, VA_BLACK,
                            &GameState->TrArenaA);
-            }
 
+                DrawString(TextFormat("AC: %d", HighlightedEntity->ArmorClass),
+                           GameState->TitleFont,
+                           GameState->TitleFont->PointSize,
+                           1510, 110, 0,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+
+                DrawString(TextFormat("Attack: %d", HighlightedEntity->AttackModifier),
+                           GameState->TitleFont,
+                           GameState->TitleFont->PointSize,
+                           1510, 160, 0,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+
+                DrawString(TextFormat("Damage: 1d%d", HighlightedEntity->Damage),
+                           GameState->TitleFont,
+                           GameState->TitleFont->PointSize,
+                           1510, 210, 0,
+                           VA_BLACK,
+                           false, VA_BLACK,
+                           &GameState->TrArenaA);
+            }
+            
             if (HighlightedEntity->Description)
             {
                 DrawString(HighlightedEntity->Description,
                            GameState->BodyFont,
                            GameState->BodyFont->PointSize,
-                           1510, 110, 400,
+                           1510, 260, 400,
                            VA_BLACK,
                            false, VA_BLACK,
                            &GameState->TrArenaA);
@@ -886,7 +922,43 @@ UpdateAndRender(b32 *Quit, b32 Reloaded, game_memory GameMemory)
         }
 
         // NOTE: Player stats UI
-        DrawRect(Rect(0, 780, 500, 1080), ColorAlpha(VA_SLATEGRAY, 200));
+        {
+            DrawRect(Rect(0, 780, 500, 1080), ColorAlpha(VA_SLATEGRAY, 200));
+
+            DrawTexture(GameState->PlayerPortraitTex, Rect(10, 860, 128, 128), VA_WHITE);
+
+            DrawString(TextFormat("HP: %d/%d", World->PlayerEntity->Health, World->PlayerEntity->MaxHealth),
+                       GameState->TitleFont,
+                       GameState->TitleFont->PointSize,
+                       160, 790, 0,
+                       VA_BLACK,
+                       false, VA_BLACK,
+                       &GameState->TrArenaA);
+
+            DrawString(TextFormat("AC: %d", World->PlayerEntity->ArmorClass),
+                       GameState->TitleFont,
+                       GameState->TitleFont->PointSize,
+                       160, 840, 0,
+                       VA_BLACK,
+                       false, VA_BLACK,
+                       &GameState->TrArenaA);
+
+            DrawString(TextFormat("Attack: %d", World->PlayerEntity->AttackModifier),
+                       GameState->TitleFont,
+                       GameState->TitleFont->PointSize,
+                       160, 890, 0,
+                       VA_BLACK,
+                       false, VA_BLACK,
+                       &GameState->TrArenaA);
+
+            DrawString(TextFormat("Damage: 1d%d", World->PlayerEntity->Damage),
+                       GameState->TitleFont,
+                       GameState->TitleFont->PointSize,
+                       160, 940, 0,
+                       VA_BLACK,
+                       false, VA_BLACK,
+                       &GameState->TrArenaA);
+        }
     }
     EndTextureMode();
 
