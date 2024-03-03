@@ -33,18 +33,23 @@ Template_Player()
     Template.Color = VA_MAROON;
     Template.Glyph = '@';
     Template.Condition = 100.0f;
-    Template.ActionCost = 100;
     Template.ViewRange = 30;
     Template.Name = "Player";
     Template.Description = "After Derval's disappearance you awake in the Souterrain. You've read about this place in the dusty tomes kept in St Catherine's Library. You remember one thing: the only way is down.";
     SetFlags(&Template.Flags, ENTITY_IS_BLOCKING);
 
-    Template.Health = Template.MaxHealth = 10;
-    Template.ArmorClass = 10;
-    Template.AttackModifier = 10;
-    Template.Damage = 3;
+    Template.Haima = 17;
+    Template.Kitrina = 9;
+    Template.Melana = 5;
+    Template.Sera = 3;
+    
+    Template.ArmorClass = 10 + Max(0, (Template.Kitrina - 5) / 2);
+    Template.Damage = 2; // NOTE: From weapon
+    Template.Health = Template.MaxHealth = Template.Haima;
 
-    Template.RegenActionCost = 500;
+    Template.ActionCost = 100;
+
+    Template.RegenActionCost = 1000;
     Template.RegenAmount = 2;
 
     return Template;
@@ -62,17 +67,25 @@ Template_AetherFly()
     Template.Color = VA_CORAL;
     Template.Glyph = 1 + 9*16;
     Template.Condition = 100.0f;
-    Template.ActionCost = 80;
     Template.ViewRange = 15;
     Template.NpcState = NPC_STATE_IDLE;
     Template.Name = "Aether Fly";
     Template.Description = "Sentient dipteron from the outer realms. Condemned to roam the Souterrain for eternity by the jealous goddess Latena.";
     SetFlags(&Template.Flags, ENTITY_IS_BLOCKING);
 
-    Template.Health = Template.MaxHealth = 3;
-    Template.ArmorClass = 13;
-    Template.AttackModifier = 3;
+    Template.Haima = 3;
+    Template.Kitrina = 5;
+    Template.Melana = 1;
+    Template.Sera = 1;
+  
+    Template.ArmorClass = 10 + Max(0, (Template.Kitrina - 5) / 2);
     Template.Damage = 1;
+    Template.Health = Template.MaxHealth = Template.Haima;
+
+    Template.ActionCost = 80;
+
+    Template.RegenActionCost = 1500;
+    Template.RegenAmount = 1;
     
     return Template;
 }

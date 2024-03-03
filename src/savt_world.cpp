@@ -227,47 +227,47 @@ AddEntity(world *World, vec2i Pos, entity *CopyEntity, memory_arena *WorldArena)
 }
 
 void
-EntityAttacksEntity(entity *Attacker, entity *Defender)
+EntityAttacksEntity(entity *Attacker, entity *Defender, world *World)
 {
     int AttackRoll = RollDice(1, 20);
 
-    b32 AttackConnects = (AttackRoll + Attacker->AttackModifier > Defender->ArmorClass);
+    b32 AttackConnects = AttackRoll + Attacker->Kitrina > Defender->ArmorClass;
 
     if (AttackConnects)
     {
-        int DamageValue = RollDice(1, Attacker->Damage);
+        int DamageValue = RollDice(1, Attacker->Damage) + Max(0, (Attacker->Haima - 5) / 2);
         Defender->Health -= DamageValue;
 
         if (Defender->Health > 0)
         {
-            TraceLog("%s (%d) hits %s (%d) for %d damage (%d + %d > %d). Remaining Health: %d.",
-                     Attacker->Name, Attacker->DebugID,
-                     Defender->Name, Defender->DebugID,
-                     DamageValue, AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
-                     Defender->Health);
+            LogEntityAction(Attacker, World,
+                            "%s (%d) hits %s (%d) for %d damage (%d + %d > %d). Health: %d.",
+                            Attacker->Name, Attacker->DebugID,
+                            Defender->Name, Defender->DebugID,
+                            DamageValue, AttackRoll, Attacker->Kitrina, Defender->ArmorClass,
+                            Defender->Health);
         }
         else
         {
-            TraceLog("%s (%d) hits %s (%d) for %d damage (%d + %d > %d). Remaining Health: %d. %s (%d) is dead.",
-                     Attacker->Name, Attacker->DebugID,
-                     Defender->Name, Defender->DebugID,
-                     DamageValue, AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
-                     Defender->Health,
-                     Defender->Name, Defender->DebugID);
+            LogEntityAction(Attacker, World,
+                            "%s (%d) hits %s (%d) for %d damage (%d + %d > %d), killing them.",
+                            Attacker->Name, Attacker->DebugID,
+                            Defender->Name, Defender->DebugID,
+                            DamageValue, AttackRoll, Attacker->Kitrina, Defender->ArmorClass);
         }
     }
     else
     {
-        TraceLog("%s (%d) misses %s (%d) (%d + %d <= %d). Remaining Health: %d.",
-                 Attacker->Name, Attacker->DebugID,
-                 Defender->Name, Defender->DebugID,
-                 AttackRoll, Attacker->AttackModifier, Defender->ArmorClass,
-                 Defender->Health);
+        LogEntityAction(Attacker, World,
+                        "%s (%d) misses %s (%d) (%d + %d <= %d).",
+                        Attacker->Name, Attacker->DebugID,
+                        Defender->Name, Defender->DebugID,
+                        AttackRoll, Attacker->Kitrina, Defender->ArmorClass);
     }
 }
 
 b32
-ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity)
+ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity, world *World)
 {
     switch(ActiveEntity->Type)
     {
@@ -279,7 +279,7 @@ ResolveEntityCollision(entity *ActiveEntity, entity *PassiveEntity)
                 case ENTITY_PLAYER:
                 case ENTITY_NPC:
                 {
-                    EntityAttacksEntity(ActiveEntity, PassiveEntity);
+                    EntityAttacksEntity(ActiveEntity, PassiveEntity, World);
                     return true;
                 } break;
 
@@ -306,7 +306,7 @@ MoveEntity(world *World, entity *Entity, vec2i NewP, b32 *Out_TurnUsed)
     {
         if (Col.Entity)
         {
-            *Out_TurnUsed = ResolveEntityCollision(Entity, Col.Entity);
+            *Out_TurnUsed = ResolveEntityCollision(Entity, Col.Entity, World);
         }
 
         return false;
@@ -1034,12 +1034,6 @@ CalculateExhaustiveFOV(world *World, vec2i Pos, u8 *VisibilityMap, int MaxRange)
             }
         }
     }
-}
-
-b32
-IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
-{
-    return FieldOfVision[XYToIdx(Pos, World->Width)];
 }
 
 b32

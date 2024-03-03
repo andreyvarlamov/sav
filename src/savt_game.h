@@ -76,6 +76,11 @@ struct entity
     int LastHealTurn;
     int RegenActionCost;
     int RegenAmount;
+
+    int Haima;
+    int Kitrina;
+    int Melana;
+    int Sera;
 };
 
 enum { ENTITY_MAX_COUNT = 16384 };
@@ -239,5 +244,13 @@ RollDice(int DieCount, int DieValue)
 
     return DiceRoll;
 }
+
+inline b32
+IsInFOV(world *World, u8 *FieldOfVision, vec2i Pos)
+{
+    return FieldOfVision[XYToIdx(Pos, World->Width)];
+}
+
+#define LogEntityAction(Entity, World, Format, ...) do { if (IsInFOV(World, World->PlayerEntity->FieldOfView, Entity->Pos)) { TraceLog(Format, __VA_ARGS__); } } while (0)
 
 #endif
